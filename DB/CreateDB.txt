@@ -1,9 +1,0 @@
-===== When creating the DB =========
-CREATE ROLE cont PASSWORD 'contunam';
-CREATE GROUPROLE readcont PASSWORD 'contunam';
-
-CREATE DATABASE contingencia;
-argel -> 'contargel'
-
-sudo iptables -A INPUT -p tcp -s 0/0 --sport 1025:65535 -d 10.20.9.186 --dport 5432 -m state --state NEW,ESTABLISHED -j ACCEPT
-sudo iptables -A OUTPUT -p tcp -s 10.20.9.186 --sport 5432 -d 0/0 --dport 1025:65535 -m state --state ESTABLISHED -j ACCEPT

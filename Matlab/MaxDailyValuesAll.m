@@ -2,22 +2,23 @@ close all;
 clear all;
 clc;
 
+javaaddpath('/usr/share/java/postgresql-jdbc4-9.2.jar');
+
 conn = database('contingencia','argel','contargel',...
         'Vendor','PostgreSQL',...
-        'Server','132.248.8.238');
+        'Server','132.248.8.238')
 
 tables = {'cont_otres'};
 compoundTitle = {'Ozono'};
 
 try 
-        %for idx = 1:1
             sqlquery = ['SELECT max(val) as mval, date_part(''day'',fecha) as dia, ' ...
                         ' date_part(''month'',fecha) as mes, date_part(''year'',fecha) as anio  ' ...
                         ' FROM cont_otres ' ...
                         ' GROUP BY dia, mes, anio  ' ...
                         ' ORDER BY anio ASC, mes ASC, dia ASC' ];
             
-            curs = exec(conn,sqlquery); %Este regresa un cursor
+            curs = exec(conn,sqlquery) %Este regresa un cursor
             datos = fetch(curs); %Este hace un fetch de los datos, se puede usar como filtro 
             tabla = datos.Data; %Aquí le exprimes los datos
 
