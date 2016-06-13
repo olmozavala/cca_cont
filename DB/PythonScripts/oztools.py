@@ -13,7 +13,7 @@ class oztools:
         return files
 
     def getTables(self):
-        return ['cont_pmdoscinco' ,'cont_nox' ,'cont_codos' ,'cont_co' ,'cont_nodos' ,'cont_no' ,'cont_otres' ,'cont_sodos', 'cont_pmdiez']
+        return ['cont_pmco','cont_pmdoscinco' ,'cont_nox' ,'cont_codos' ,'cont_co' ,'cont_nodos' ,'cont_no' ,'cont_otres' ,'cont_sodos', 'cont_pmdiez']
 
     def findTable(self,fileName):
         if "PM2.5" in fileName:
@@ -27,6 +27,9 @@ class oztools:
 
         if "CO2" in fileName:
             return "cont_codos"
+
+        if "PMCO" in fileName:
+            return "cont_pmco"
 
         if "CO" in fileName:
             return "cont_co"
@@ -42,9 +45,6 @@ class oztools:
 
         if "SO2" in fileName:
             return "cont_sodos"
-
-        if "PMCO" in fileName:
-            return "cont_pmco"
 
     def findDateFormat(self,fileName):
         "Obtains the date format"

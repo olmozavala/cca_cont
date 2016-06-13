@@ -1,4 +1,4 @@
-function [accr name] = getContaminantes(tabla)
+function [accr name] = getContaminantes(tabla);
     if strcmp(tabla,'cont_pmdoscinco')
         accr = 'PM2.5'
         name = 'Particulas menores a 2.5'
@@ -6,6 +6,10 @@ function [accr name] = getContaminantes(tabla)
     if strcmp(tabla,'cont_nox')
         accr = 'NOX'
         name = 'Oxidos de nitrogeno'
+    end
+    if strcmp(tabla,'cont_pmco')
+        accr = 'PMCO'
+        name = 'Particulas fraccion gruesa'
     end
     if strcmp(tabla,'cont_co')
         accr = 'CO'

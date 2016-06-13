@@ -124,6 +124,22 @@
 				<fk_column name="id_est" pk="id" />
 			</fk>
 		</table>
+		<table name="cont_pmco" >
+			<column name="id" type="serial" jt="4" mandatory="y" />
+			<column name="fecha" type="timestamp" jt="93" mandatory="y" />
+			<column name="val" type="real" jt="7" mandatory="y" />
+			<column name="id_est" type="char" length="3" jt="1" />
+			<index name="pk_cont_co_6" unique="PRIMARY_KEY" >
+				<column name="id" />
+			</index>
+			<index name="unique_pmco" unique="UNIQUE" >
+				<column name="fecha" />
+				<column name="id_est" />
+			</index>
+			<fk name="fk_cont_pmco" to_schema="public" to_table="cont_estaciones" >
+				<fk_column name="id_est" pk="id" />
+			</fk>
+		</table>
 		<table name="cont_pmdiez" >
 			<column name="id" type="serial" jt="4" mandatory="y" />
 			<column name="fecha" type="timestamp" jt="93" mandatory="y" />
@@ -361,6 +377,7 @@
 			<column name="r_raster_column" type="name" />
 			<column name="overview_factor" type="integer" />
 		</view>
+		<sequence name="cont_pmdiez_0_id_seq" start="1" />
 		<sequence name="cont_seq_co" start="1" />
 		<sequence name="cont_seq_codos" start="1" />
 		<sequence name="cont_seq_no" start="1" />
@@ -32805,18 +32822,19 @@ AS $function$ SELECT _UpdateRasterSRID($1, $2, $3, $4) $function$
 		<entity schema="public" name="cont_monthly_onesixsix" color="94e870" x="45" y="225" />
 		<entity schema="public" name="cont_year_onesixsix" color="94e870" x="255" y="240" />
 		<entity schema="public" name="cont_nodos" color="94c3ea" x="1155" y="1035" />
-		<entity schema="public" name="cont_estaciones" color="94c3ea" x="1185" y="810" />
 		<entity schema="public" name="cont_co" color="94c3ea" x="1260" y="570" />
 		<entity schema="public" name="raster_overviews" color="94c3ea" x="1035" y="45" />
 		<entity schema="public" name="raster_columns" color="94c3ea" x="810" y="60" />
 		<entity schema="public" name="geography_columns" color="94c3ea" x="660" y="270" />
 		<entity schema="public" name="spatial_ref_sys" color="94c3ea" x="1050" y="360" />
 		<entity schema="public" name="geometry_columns" color="94c3ea" x="630" y="75" />
-		<entity schema="public" name="cont_pmdiez" color="94c3ea" x="1395" y="1050" />
 		<entity schema="public" name="cont_codos" color="94c3ea" x="1380" y="705" />
 		<entity schema="public" name="cont_units" color="94c3ea" x="1650" y="825" />
 		<entity schema="public" name="cont_sodos" color="94c3ea" x="1035" y="630" />
 		<entity schema="public" name="cont_no" color="94c3ea" x="1440" y="840" />
+		<entity schema="public" name="cont_pmdiez" color="94c3ea" x="1380" y="1050" />
+		<entity schema="public" name="cont_estaciones" color="94c3ea" x="1185" y="810" />
+		<entity schema="public" name="cont_pmco" color="94c3ea" x="1545" y="975" />
 		<script name="cont_co" id="Query_2f8e1a78" language="SQL" >
 			<string><![CDATA[CREATE TABLE "public".cont_co ( 
 	id                   serial  NOT NULL,

@@ -36,13 +36,17 @@ def insertIntoDBAfter2011(fileName, conn, dateFormat, year, sqlCont):
         lineValues = line.split(',')
         fechaValues =  lineValues[0].split(' ')
         fecha =  fechaValues[0]+'/'+str((int(fechaValues[1].split(':')[0])+addMe))
+        #print fecha
         id_est =  lineValues[1]
         table =  oztools.findTable(lineValues[2])
         myval =  lineValues[3]
 
         if myval != '':
+            #sql = "SET TimeZone='UTC'; INSERT INTO %s (fecha, val, id_est) VALUES (to_timestamp('%s','%s'), '%s', '%s')\n" % (table, fecha,  dateFormat, myval, id_est)
+            #print sql
+            #cur.execute(sql)
             if sqlQueries[table] == '':
-                print "Filling something in table: ",table
+                print "Filling rows in table: ",table
                 sqlQueries[table] = "SET TimeZone='UTC'; INSERT INTO %s (fecha, val, id_est) VALUES (to_timestamp('%s','%s'), '%s', '%s')\n" % (table, fecha,  dateFormat, myval, id_est)
             else:
                 sqlQueries[table] = sqlQueries[table] + " ,(to_timestamp('%s','%s'), '%s', '%s')\n" % (fecha,  dateFormat, myval, id_est)
@@ -54,9 +58,12 @@ def insertIntoDBAfter2011(fileName, conn, dateFormat, year, sqlCont):
                 sql = sqlQueries[mykey]
                 if sql != '':
                     #print "Inserting in:",mykey
+                    #try:
                     cur.execute(sql)
                     conn.commit()
                     sqlQueries[mykey] = ''
+                    #except:
+                    #    print sqlQueries[mykey]
 
 
     for mykey in sqlQueries.keys():
@@ -130,7 +137,7 @@ def restartAllSeq(conn,tables):
 
 if __name__ == "__main__":
 
-    fromY = 2015
+    fromY = 2012
     toY = 2017
 
     sqlCont = SqlCont()
