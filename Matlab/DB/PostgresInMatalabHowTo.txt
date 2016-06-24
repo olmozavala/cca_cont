@@ -15,9 +15,6 @@ En debian: sudo apt-get install libpostgresql-jdbc-java
 Para probar, en matlab:
 
 %Para crear la conexión
-conn = database('contingencia','argel','contargel',...
-    'Vendor','PostgreSQL',...
-    'Server','132.248.8.238');
 
 %sqlquery = 'SELECT * FROM cont_estaciones';
 

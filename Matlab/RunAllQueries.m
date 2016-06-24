@@ -3,6 +3,8 @@ function RunAllQueries()
     clear all;
     clc;
 
+    addpath('./lib/')
+    addpath('./AllPrograms/')
     javaaddpath('/usr/share/java/postgresql-jdbc4-9.2.jar');
 
     conn = database('contingencia','argel','contargel',...
@@ -16,19 +18,22 @@ function RunAllQueries()
     ppmVal = '166';
 
     try
-        [years, count] = ContingenciasPorAnio('cont_otres',ppmVal,conn);
+%        [years, count] = ContingenciasPorAnio('cont_otres',ppmVal,conn);
 
         for ii = 1:length(tablas)
             tabla = tablas{ii};
 
-            [dates, vals] = MinimosMaximosDiarios(tabla,conn);
-            [dates, vals] = MinimosGlobalesDiarios(tabla,conn);
-            [dates, vals] = MinimosGlobalesHorarios(tabla,conn);
-            
-            [dates, vals] = PromediosGlobalesDiarios(tabla,conn);
-
-            [dates, vals] = MaximosGlobalesHorarios(tabla,conn);
-            [dates, vals] = MaximosGlobalesDiarios(tabla,conn);
+            %[dates, vals] = MinimosMaximosDiarios(tabla,conn);
+%            [dates, vals] = MinimosMaximosDiariosByYear(tabla,num2str(2012),conn);
+%            [dates, vals] = MinimosGlobalesDiarios(tabla,conn);
+%            [dates, vals] = MinimosGlobalesHorarios(tabla,conn);
+%            
+%            [dates, vals] = PromediosGlobalesDiarios(tabla,conn);
+%
+%            [dates, vals] = MaximosGlobalesHorarios(tabla,conn);
+%            [dates, vals] = MaximosGlobalesDiarios(tabla,conn);
+%            [vals] = AvgDayOfWeek(tabla,conn);
+            [vals] = AvgByMonth(tabla,conn);
 
 %            % --------------------------------------------------------------%
 %            % Plotting values by station, in this case maximum value by day
