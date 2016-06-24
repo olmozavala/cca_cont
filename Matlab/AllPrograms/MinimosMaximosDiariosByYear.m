@@ -1,6 +1,5 @@
 function [dates vals] = MinimosMaximosDiarios(tabla,year, conn)
-    %%%
-    sqlquery = fileread('../DB/SQL_queries/Matlab/MinimosMaximosDiariosByYearMatlab.sql');
+    %%% sqlquery = fileread('../DB/SQL_queries/Matlab/MinimosMaximosDiariosByYearMatlab.sql');
     sqlquery = strrep(sqlquery,'TABLE',tabla);
     sqlquery = strrep(sqlquery,'YEAR',year)
 
@@ -20,5 +19,6 @@ function [dates vals] = MinimosMaximosDiarios(tabla,year, conn)
     axis('tight')
     grid
     set(gcf,'PaperPositionMode','auto');
+    mkdir('Figures','MinimosMaximos');
     saveas(f,strcat('Figures/MinimosMaximos/',tabla,'_',year,'.jpg'));
 end

@@ -22,5 +22,6 @@ function [dates vals] = MaximosGlobalesHorarios(tabla,conn)
     axis('tight')
     grid
     set(gcf,'PaperPositionMode','auto');
+    mkdir('Figures','MaximosGlobalesHorarios');
     saveas(f,strcat('Figures/MaximosGlobalesHorarios/',tabla,'.jpg'));
 end

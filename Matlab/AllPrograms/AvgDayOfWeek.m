@@ -22,5 +22,6 @@ function [vals] = AvgDayOfWeek(tabla,conn)
     grid
     set(gca,'Xtick',del,'XtickLabel',labels);
     set(gcf,'PaperPositionMode','auto');
+    mkdir('Figures','AvgByDayOfWeek');
     saveas(f,strcat('Figures/AvgByDayOfWeek/',tabla,'.jpg'));
 end

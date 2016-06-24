@@ -19,5 +19,6 @@ function [dates vals] = MinimosMaximosDiarios(tabla,conn)
     axis('tight')
     grid
     set(gcf,'PaperPositionMode','auto');
+    mkdir('Figures','MinimosMaximos');
     saveas(f,strcat('Figures/MinimosMaximos/',tabla,'.jpg'));
 end

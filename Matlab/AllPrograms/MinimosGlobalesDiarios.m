@@ -22,5 +22,6 @@ function [dates vals] = MinimosGlobalesDiarios(tabla,conn)
     axis('tight')
     grid
     set(gcf,'PaperPositionMode','auto');
+    mkdir('Figures','MinimosGlobalesDiarios');
     saveas(f,strcat('Figures/MinimosGlobalesDiarios/',tabla,'.jpg'));
 end

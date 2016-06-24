@@ -25,5 +25,6 @@ function [vals] = AvgByMonth(tabla,conn)
     grid
     set(gca,'Xtick',del,'XtickLabel',labels);
     set(gcf,'PaperPositionMode','auto');
+    mkdir('Figures','AvgByMonth');
     saveas(f,strcat('Figures/AvgByMonth/',tabla,'.jpg'));
 end

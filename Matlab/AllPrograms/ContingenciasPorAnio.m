@@ -13,5 +13,6 @@ function [years, vals] = ContingenciasPorAnio(tabla,limite,conn)
     plot(years,vals,'.r');
     title(titleF);
     set(gcf,'PaperPositionMode','auto');
+    mkdir('Figures','DiasDeContingenciaPorAnio');
     saveas(f,strcat('Figures/DiasDeContingenciaPorAnio.jpg'));
 end

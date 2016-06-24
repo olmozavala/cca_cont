@@ -23,5 +23,6 @@ function [dates vals] = MinimosGlobalesHorarios(tabla,conn)
     axis('tight')
     grid
     set(gcf,'PaperPositionMode','auto');
+    mkdir('Figures','MinimosGlobalesHorarios');
     saveas(f,strcat('Figures/MinimosGlobalesHorarios/',tabla,'.jpg'));
 end
