@@ -2,7 +2,8 @@
 function [dates vals] = MaximosGlobalesDiarios(tabla,conn)
     %%% MAXIMOSGLOBALESHORARIOS Gets the maximum values for each hour from all the stations
 
-    sqlquery = fileread('../DB/SQL_queries/Matlab/MaximosGlobalesDiariosMatlab.sql');
+    folder = getSqlFolder()
+    sqlquery = fileread(strcat(folder,'/','MaximosGlobalesDiariosMatlab.sql');
     sqlquery = strrep(sqlquery,'TABLE',tabla);
 
     curs = exec(conn,sqlquery);%Este regresa un cursor

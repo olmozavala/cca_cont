@@ -1,5 +1,7 @@
 function [years, vals] = ContingenciasPorAnio(tabla,limite,conn)
-    sqlquery = fileread('../DB/SQL_queries/Matlab/DiasDeContingenciaPorAnioMatlab.sql');
+
+    folder = getSqlFolder()
+    sqlquery = fileread(strcat(folder,'/','DiasDeContingenciaPorAnioMatlab.sql');
     sqlquery = strrep(sqlquery,'TABLE',tabla);
     sqlquery = strrep(sqlquery,'PARAM',limite)
 

@@ -1,4 +1,5 @@
 function [dates vals] = MinimosMaximosDiarios(tabla,year, conn)
+
     %%% sqlquery = fileread('../DB/SQL_queries/Matlab/MinimosMaximosDiariosByYearMatlab.sql');
     sqlquery = strrep(sqlquery,'TABLE',tabla);
     sqlquery = strrep(sqlquery,'YEAR',year)

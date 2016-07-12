@@ -2,7 +2,8 @@
 function [dates vals] = MinimosGlobalesHorarios(tabla,conn)
     %%% MINIMOSGLOBALESHORARIOS Gets the minimum values for each hour from all the stations
 
-    sqlquery = fileread('../DB/SQL_queries/Matlab/MinimosGlobalesHorariosMatlab.sql');
+    folder = getSqlFolder()
+    sqlquery = fileread(strcat(folder,'/','MinimosGlobalesHorariosMatlab.sql');
     sqlquery = strrep(sqlquery,'TABLE',tabla);
 
     curs = exec(conn,sqlquery);%Este regresa un cursor

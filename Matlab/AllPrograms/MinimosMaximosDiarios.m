@@ -1,6 +1,7 @@
 function [dates vals] = MinimosMaximosDiarios(tabla,conn)
     %%%
-    sqlquery = fileread('../DB/SQL_queries/Matlab/MinimosMaximosDiariosMatlab.sql');
+    folder = getSqlFolder()
+    sqlquery = fileread(strcat(folder,'/','MinimosMaximosDiariosMatlab.sql');
     sqlquery = strrep(sqlquery,'TABLE',tabla);
 
     curs = exec(conn,sqlquery);%Este regresa un cursor

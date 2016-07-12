@@ -32,8 +32,8 @@ function RunAllQueries()
 %
 %            [dates, vals] = MaximosGlobalesHorarios(tabla,conn);
 %            [dates, vals] = MaximosGlobalesDiarios(tabla,conn);
-%            [vals] = AvgDayOfWeek(tabla,conn);
-            [vals] = AvgByMonth(tabla,conn);
+            [vals] = AvgDayOfWeek(tabla,conn);
+%            [vals] = AvgByMonth(tabla,conn);
 
 %            % --------------------------------------------------------------%
 %            % Plotting values by station, in this case maximum value by day

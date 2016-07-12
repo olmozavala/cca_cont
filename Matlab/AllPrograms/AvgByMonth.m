@@ -2,7 +2,8 @@
 function [vals] = AvgByMonth(tabla,conn)
     %%% AVGBYMONTH Gets the average contaminant by month
 
-    sqlquery = fileread('../DB/SQL_queries/Matlab/AvgByMonthMatlab.sql');
+    folder = getSqlFolder()
+    sqlquery = fileread(strcat(folder,'/','AvgByMonthMatlab.sql');
     sqlquery = strrep(sqlquery,'TABLE',tabla);
 
     curs = exec(conn,sqlquery);%Este regresa un cursor
