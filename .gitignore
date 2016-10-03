@@ -1,0 +1,16 @@
+/DB/DataBackup
+/DB/PythonScripts/DataForDB
+/DB/PythonScripts/DataForDB
+/CCA_Contingencia.zip
+/DB/PythonScripts/.netrc
+/DB/PythonScripts/OldVersion/
+/DB/PythonScripts/fix.sql
+/DB/PythonScripts/tags
+/DB/PythonScripts/test.sql
+/HoyoDeSmog/
+/AngelPlots/
+/Matlab/Figures/
+/Tesis_Distribucion_Espacial_de_Ozono_Guadalajara.docx
+/WRF/
+*.pyc
+*.swp
