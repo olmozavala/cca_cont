@@ -19,6 +19,7 @@ directory and add the path of the postgresql driver. In debian the driver should
 
   ~~~~
    javaaddpath('/usr/share/java/postgresql-jdbc4-9.2.jar');
+
    conn = database('contingencia','soloread','SH3<t!4e',...
                   'Vendor','PostgreSQL','Server','132.248.8.238')
   ~~~~
