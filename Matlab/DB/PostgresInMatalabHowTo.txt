@@ -5,7 +5,8 @@ Para echar a andar Matlab+postgresql
 En debian: sudo apt-get install libpostgresql-jdbc-java
 
 
-2.-  Crear documento javaclasspath.txt en el directorio que arroja matlab > prefdir y escribir el path al driver
+2.-  Crear documento javaclasspath.txt en el directorio que arroja matlab cuando escribes:
+     > prefdir y escribir el path al driver
 
 3.- Reiniciar matlab
 
