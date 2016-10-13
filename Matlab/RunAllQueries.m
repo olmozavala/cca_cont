@@ -3,9 +3,15 @@ function RunAllQueries()
     clear all;
     clc;
 
-    addpath('./lib/')
-    addpath('./AllPrograms/')
-    javaaddpath('/usr/share/java/postgresql-jdbc4-9.2.jar');
+    if(isunix)
+        addpath('./lib/')
+        addpath('./AllPrograms/')
+        javaaddpath('/usr/share/java/postgresql-jdbc4-9.2.jar');
+    elseif(ispc)
+        addpath('.\lib')
+        addpath('.\AllPrograms')
+        javaaddpath('.\DB\JDBCDriver\postgresql-9.4.1211.jar');
+    end
 
     conn = database('contingencia','soloread','SH3<t!4e',...
             'Vendor','PostgreSQL',...
