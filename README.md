@@ -46,4 +46,3 @@ directory and add the path of the postgresql driver. In debian the driver should
    conn = database('contingencia','soloread','SH3<t!4e',...
                   'Vendor','PostgreSQL','Server','132.248.8.238')
   ~~~~
-Gisell
