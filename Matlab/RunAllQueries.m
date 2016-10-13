@@ -10,7 +10,7 @@ function RunAllQueries()
     elseif(ispc)
         addpath('.\lib')
         addpath('.\AllPrograms')
-        javaaddpath('.\DB\JDBCDriver\postgresql-9.4.1211.jar');
+        javaaddpath('.\DB\JDBCDriver\postgresql-9.4.1211.jre7');
     end
 
     conn = database('contingencia','soloread','SH3<t!4e',...
