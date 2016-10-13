@@ -26,11 +26,9 @@ directory and add the path of the postgresql driver. In debian the driver should
 
 Install in Windows (Ubuntu)
 ---------------------------
-0.- Install java. Currently using JDK 8. Download from [Oracle]
-
-  `apt-get install penjdk-8-jdk`
-
-1.- Install jdbc driver for postgresql:
+0.- Dowload and install Java JDK. Currently using JDK 8. Download from [Oracle](http://www.oracle.com/technetwork/java/javase/downloads/jdk8-downloads-2133151.html)
+1.- Download jdbc driver for postgresql from here [link](https://jdbc.postgresql.org/) (please select the one that corresponds
+to your Java version, if you are using Java 8 then it should be JDBC42):
 
   `apt-get install libpostgresql-jdbc-java`
 
