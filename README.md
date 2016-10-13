@@ -5,7 +5,7 @@ Install in Linux (Ubuntu)
 ---------------------------
 0.- Install java. The java version depends on your version of the jdb driver, if you are up to date it should work with java 8:
 
-  `apt-get install penjdk-8-jdk`
+  `apt-get install openjdk-7-jdk`
 
 1.- Install jdbc driver for postgresql:
 
@@ -26,15 +26,13 @@ directory and add the path of the postgresql driver. In debian the driver should
 
 Install in Windows (Ubuntu)
 ---------------------------
-0.- Dowload and install Java JDK. First check which version of Java does your Matlab uses with `java -version`.
+1.- Dowload and install Java JDK. First check which version of Java does your Matlab uses with `java -version`.
  For version JDK 7. Download from [Oracle](http://www.oracle.com/technetwork/java/javase/downloads/jdk7-downloads-1880260.html)
 
-1.- Download jdbc driver for postgresql from here [link](https://jdbc.postgresql.org/) (please select the one that corresponds
+2.- Download jdbc driver for postgresql from here [link](https://jdbc.postgresql.org/) (please select the one that corresponds
 to your Java version, if you are using Java 7 then it should be JDBC41).
 
-3.- Add the jar file into your path, we are currently using the one from `.\DB\JDBCDriver\postgresql-9.4.1211.jre7.jar`.
-
-4.- Test the connection to the database with matlab:
+3.- Test the connection to the database with matlab:
   ~~~~
    javaaddpath('.\DB\JDBCDriver\postgresql-9.4.1211.jre7.jar');
 
