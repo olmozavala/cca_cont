@@ -3,14 +3,9 @@ function RunAllQueries()
     clear all;
     clc;
 
-    if(isunix)
-        addpath('./lib/')
-        addpath('./AllPrograms/')
-        javaaddpath('/usr/share/java/postgresql-jdbc4-9.2.jar');
-    elseif(ispc)
-        addpath('.\lib')
-        addpath('.\AllPrograms')
-        javaaddpath('.\DB\JDBCDriver\postgresql-9.4.1211.jre6.jar');
+    addpath('./lib/')
+    addpath('./AllPrograms/')
+    javaaddpath('C:\Users\Felipe\Documents\servicio_datos\cca_cont\Matlab\DB\JDBCDriver\postgresql-9.4.1211.jre6.jar');
 
     conn = database('contingencia','soloread','SH3<t!4e',...
             'Vendor','PostgreSQL',...
@@ -19,9 +14,9 @@ function RunAllQueries()
     mycolors = 'rgbcmyk';
 
     tablas = getTablas();
-    [claves,allest] = getEstaciones(conn);
+    [claves allest] = getEstaciones(conn);
     ppmVal = '166';
-tablas
+
     try
 %        [years, count] = ContingenciasPorAnio('cont_otres',ppmVal,conn);
 
@@ -37,9 +32,9 @@ tablas
 %
 %            [dates, vals] = MaximosGlobalesHorarios(tabla,conn);
 %            [dates, vals] = MaximosGlobalesDiarios(tabla,conn);
-%            [vals] = AvgDayOfWeek(tabla,conn);
+             [vals] = Avgbyhour(tabla,conn);
+ %           [vals] = AvgDayOfWeek(tabla,conn);
 %            [vals] = AvgByMonth(tabla,conn);
-             [vals] = AvgByHour(tabla,conn);
 
 %            % --------------------------------------------------------------%
 %            % Plotting values by station, in this case maximum value by day
@@ -69,4 +64,3 @@ tablas
     display('Closing connection!');
     close(conn)
 end
-
