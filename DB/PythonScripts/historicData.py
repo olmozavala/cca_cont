@@ -14,8 +14,8 @@ __author__="Olmo S. Zavala Romero"
 
 if __name__ == "__main__":
 
-    fromY = 2012
-    toY = 2017
+    fromY = 1986
+    toY = 2016
 
     sqlCont = SqlCont()
     oztools= oztools()
