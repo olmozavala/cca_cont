@@ -11,6 +11,8 @@ function RunAllQueries()
         addpath('.\lib')
         addpath('.\AllPrograms')
         javaaddpath('.\DB\JDBCDriver\postgresql-9.4.1211.jre6.jar');
+        %javaaddpath('C:\Users\Felipe\Documents\servicio_datos\cca_cont\Matlab\DB\JDBCDriver\postgresql-9.4.1211.jre6.jar')
+    end
 
     conn = database('contingencia','soloread','SH3<t!4e',...
             'Vendor','PostgreSQL',...
@@ -39,7 +41,7 @@ tablas
 %            [dates, vals] = MaximosGlobalesDiarios(tabla,conn);
 %            [vals] = AvgDayOfWeek(tabla,conn);
 %            [vals] = AvgByMonth(tabla,conn);
-             [vals] = AvgByHour(tabla,conn);
+             [vals] = Avgbyhour_yiz(tabla,conn);  
 
 %            % --------------------------------------------------------------%
 %            % Plotting values by station, in this case maximum value by day

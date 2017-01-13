@@ -1,4 +1,4 @@
-function [vals] = Avgbyhour(tabla,conn)
+function [vals] = Avgbyhour_yiz(tabla,conn)
 
     %%% It Gets the average for each hour from all the stations
 
