@@ -33,9 +33,9 @@ tablas
             %[dates, vals] = MinimosMaximosDiarios(tabla,conn);
 %            [dates, vals] = MinimosMaximosDiariosByYear(tabla,num2str(2012),conn);
 %            [dates, vals] = MinimosGlobalesDiarios(tabla,conn);            
-            for est = 1:length(claves)
-                [dates, vals] = MinimosGlobalesDiariosPorEstacion(claves(est,:),tabla,conn);                   
-            end
+%             for est = 1:length(claves)
+%                 [dates, vals] = MinimosGlobalesDiariosPorEstacion(claves(est,:),tabla,conn);                   
+%             end
 %            [dates, vals] = MinimosGlobalesHorarios(tabla,conn);
 %            
 %            [dates, vals] = PromediosGlobalesDiarios(tabla,conn);
@@ -44,7 +44,7 @@ tablas
 %            [dates, vals] = MaximosGlobalesDiarios(tabla,conn);
 %            [vals] = AvgDayOfWeek(tabla,conn);
 %            [vals] = AvgByMonth(tabla,conn);
-%              [vals] = Avgbyhour_yiz(tabla,conn);  
+             [vals] = Avgbyhour_yiz(tabla,conn);  
 
 %            % --------------------------------------------------------------%
 %            % Plotting values by station, in this case maximum value by day
