@@ -27,12 +27,15 @@ tablas
     try
 %        [years, count] = ContingenciasPorAnio('cont_otres',ppmVal,conn);
 
-        for ii = 1:length(tablas)
+        for ii = 5:length(tablas)
             tabla = tablas{ii};
 
             %[dates, vals] = MinimosMaximosDiarios(tabla,conn);
 %            [dates, vals] = MinimosMaximosDiariosByYear(tabla,num2str(2012),conn);
-%            [dates, vals] = MinimosGlobalesDiarios(tabla,conn);
+%            [dates, vals] = MinimosGlobalesDiarios(tabla,conn);            
+%             for est = 1:length(claves)
+%                 [dates, vals] = MinimosGlobalesDiariosPorEstacion(claves(est,:),tabla,conn);                   
+%             end
 %            [dates, vals] = MinimosGlobalesHorarios(tabla,conn);
 %            
 %            [dates, vals] = PromediosGlobalesDiarios(tabla,conn);
