@@ -1,5 +1,5 @@
-clear
-clc
+clear;
+clc;
 
 festivos=csvread('dias_festivos.csv');
 festivos(find(isnan(festivos))) = [];           %Elimina todos los valores NaN del arreglo "festivos".
