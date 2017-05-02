@@ -1,6 +1,6 @@
 clear all
 close all
-load /home2/Dropbox/Articulos/Contingencia/MAT_72est_historicos/O3_1986-2016.mat
+load O3_1986-2016.mat
 
 Nuevas_estaciones = { ...
     'ACO','ARA','ATI','AZC','BJU','CAM','CES','CFE','CHA','CHO', ...
@@ -52,12 +52,12 @@ A = inv(H'*H)*H'*MedicionesGrande(I,32);
                  + A(10)*sin(Diaria*FechasGrande2) + A(11)*cos(Diaria*FechasGrande2)...
                  + A(12)*sin(Semidiurna*FechasGrande2) + A(13)*cos(Semidiurna*FechasGrande2);
 hold on
-plot (FechasGrande2, Ozono32,'r'); 
+plot (FechasGrande2(1:10), Ozono32(1:10),'r'); 
 
 
 Err = MedicionesGrande(:,32)-Ozono32;
 figure()
-plot(FechasGrande2, Err,'m'); 
+plot(FechasGrande2(1:10), Err(1:10),'m'); 
 
 
 
