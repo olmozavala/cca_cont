@@ -1,0 +1,19 @@
+====== Fill data into DB ======
+-- Credentials
+    Edit file ~/.netrc with the proper user and pasw
+
+-- Install in python
+    psycopg2
+    netrc
+
+-- Use SqlCont to get the connection to the database
+from sqlCont import SqlCont
+    sqlCont = SqlCont() # Initializes our main class SqlCont
+    conn = sqlCont.getPostgresConn()
+
+
+-- oztools 
+from oztools import ContIOTools
+    getMeteoTables -> Las tablas de meteorologia
+    getTables      -> Last tablas de contaminancion
+
