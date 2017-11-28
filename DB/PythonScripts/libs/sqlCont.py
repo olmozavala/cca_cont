@@ -9,6 +9,7 @@ class SqlCont:
         """Constructor of the class"""
 
     def getPostgresConn(self):
+        """ Makes the connection with the DB"""
         secrets = netrc.netrc()
         login, account, passw = secrets.hosts['OWGIS']
 
@@ -29,9 +30,10 @@ class SqlCont:
         cur.close();
 
     def delFromYear(self,year,tables,conn):
+        """ Deletes some years of data from a table"""
         text = "Are you sure you want to delete from year: %s (Y or N)? " % (year)
-        ans = raw_input(text)
-        if ans == 'Y':
+        ans = input(text)
+        if ans.lower() == 'y':
             cur = conn.cursor();
             for table in tables:
                 print("Deleting table %s from year %s" % (table,year))
@@ -43,6 +45,7 @@ class SqlCont:
             print("Not droping tables!")
 
     def getContaminantes(self,conn):
+        """ Gets all the table names of our DB"""
         cur = conn.cursor();
         cur.execute(""" SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'; """);
         rows = cur.fetchall();
@@ -51,58 +54,64 @@ class SqlCont:
         return rows
 
     def insertIntoDBAfter2011(self,fileName, conn, dateFormat, year, sqlCont, oztools):
-        "Filling data into Database mode AFTER 2011"
+        "Filling data into Database mode AFTER 2011 from specific file"
         print("Filling data into Database. Using mode AFTER 2011")
         cur = conn.cursor();
         f = open(fileName)
 
-        firstData = 11
+        firstData = 11 # First line with data in the input file
         addMe = -1
 
-        values = f.readlines()[firstData:]
+        values = f.readlines()[firstData:] #Reads all the data from the file
         c_table = ''
-        sqlQueries = {}
+        # Initializes a dictionary that will contain the database names as keys
+        # and the SQL as values
+        sqlQueries = {} 
 
-
+        # Gets the names of the tables
         contaminantes = sqlCont.getContaminantes(conn)
+        print(contaminantes)
         for contaminante in contaminantes:
             sqlQueries[contaminante[0]] = ''
 
-        print("Processing file...")
+        print("Processing file: ",fileName)
         count = 0
         for line in values:
-            count = count + 1
-            lineValues = line.split(',')
-            fechaValues =  lineValues[0].split(' ')
-            fecha =  fechaValues[0]+'/'+str((int(fechaValues[1].split(':')[0])+addMe))
-            #print fecha
-            id_est =  lineValues[1]
-            table =  oztools.findTable(lineValues[2])
-            myval =  lineValues[3]
+            try:
+                count = count + 1
+                lineValues = line.split(',')
+                fechaValues =  lineValues[0].split(' ')
+                fecha =  fechaValues[0]+'/'+str((int(fechaValues[1].split(':')[0])+addMe))
+                id_est =  lineValues[1]
+                table =  oztools.findTable(lineValues[2])
+                myval =  lineValues[3]
 
-            if myval != '':
-                #sql = "SET TimeZone='UTC'; INSERT INTO %s (fecha, val, id_est) VALUES (to_timestamp('%s','%s'), '%s', '%s')\n" % (table, fecha,  dateFormat, myval, id_est)
-                #print sql
-                #cur.execute(sql)
-                if sqlQueries[table] == '':
-                    print("Filling rows in table: ",table)
-                    sqlQueries[table] = "SET TimeZone='UTC'; INSERT INTO %s (fecha, val, id_est) VALUES (to_timestamp('%s','%s'), '%s', '%s')\n" % (table, fecha,  dateFormat, myval, id_est)
-                else:
-                    sqlQueries[table] = sqlQueries[table] + " ,(to_timestamp('%s','%s'), '%s', '%s')\n" % (fecha,  dateFormat, myval, id_est)
+                if myval != '':
+                    #sql = "SET TimeZone='UTC'; INSERT INTO %s (fecha, val, id_est) VALUES (to_timestamp('%s','%s'), '%s', '%s')\n" % (table, fecha,  dateFormat, myval, id_est)
+                    #print sql
+                    #cur.execute(sql)
+                    if sqlQueries[table] == '':
+                        print("Filling rows in table: ",table)
+                        sqlQueries[table] = "SET TimeZone='UTC'; INSERT INTO %s (fecha, val, id_est) VALUES (to_timestamp('%s','%s'), '%s', '%s')\n" % (table, fecha,  dateFormat, myval, id_est)
+                    else:
+                        sqlQueries[table] = sqlQueries[table] + " ,(to_timestamp('%s','%s'), '%s', '%s')\n" % (fecha,  dateFormat, myval, id_est)
 
 
-            if count % 100000 == 0:
-                print(count)
-                for mykey in sqlQueries.keys():
-                    sql = sqlQueries[mykey]
-                    if sql != '':
-                        #print "Inserting in:",mykey
-                        #try:
-                        cur.execute(sql)
-                        conn.commit()
-                        sqlQueries[mykey] = ''
-                        #except:
-                        #    print sqlQueries[mykey]
+                if count % 100000 == 0:
+                    print(count)
+                    for mykey in sqlQueries.keys():
+                        sql = sqlQueries[mykey]
+                        if sql != '':
+                            #print "Inserting in:",mykey
+                            #try:
+                            cur.execute(sql)
+                            conn.commit()
+                            sqlQueries[mykey] = ''
+                            #except:
+                            #    print sqlQueries[mykey]
+            except:
+                print("ERROR: fail to insert for line: ", line)
+
 
         # Last list of inserts
         for mykey in sqlQueries.keys():

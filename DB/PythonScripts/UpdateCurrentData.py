@@ -1,11 +1,11 @@
 import sys
 
 sys.path.insert(0, './libs')
-sys.path.insert(0, '/home/olmozavala/Dropbox/TutorialsByMe/Python/PythonExamples/OZLIB/DB')
 
 from pandas import Series, DataFrame
 import pandas as pd
 import psycopg2
+from psycopg2 import errorcodes
 from ozdb import Ozdb
 from sqlCont import SqlCont
 from oztools import ContIOTools
@@ -18,9 +18,16 @@ def insertToDB( fecha, id_est, value, table, conn):
     cur = conn.cursor();
     try:
         cur.execute(sql);
-    except Exception:
-        print('Assuming key already existed')
+        conn.commit()
+    except psycopg2.DatabaseError as e:
+    #except psycopg2.IntegrityError as e:
+        if e.pgcode == '25P02':
+            print('Failed to insert query, CODE:', e.pgcode, " Detail: ", errorcodes.lookup(e.pgcode[:2]))
+        else:
+            print('SOPAS, CODE:', e.pgcode, " Detail: ", errorcodes.lookup(e.pgcode[:2]))
+
         cur.close()
+        conn.rollback()
 
 
 def updateTables(sqlCont, conn, ozTools, tables, parameters, month, year):
@@ -52,17 +59,16 @@ ozTools= ContIOTools()
 
 # Obtains current month and year
 today = date.today() 
-month = today.month-1
+month = today.month
 year = today.year
 
 # Updating the contaminantes tables
 tables = ozTools.getTables()
 parameters = ozTools.getContaminants()
-#updateTables(sqlCont, conn, ozTools, tables, parameters,month, year)
+updateTables(sqlCont, conn, ozTools, tables, parameters,month, year)
 
 # Updating the meteorolgical tables
 tables = ozTools.getMeteoTables()
 parameters = ozTools.getMeteoParams()
 updateTables(sqlCont, conn, ozTools, tables, parameters,month, year)
 
-conn.commit()

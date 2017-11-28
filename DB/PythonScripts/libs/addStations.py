@@ -17,7 +17,7 @@ def fillStationsToDB(fileName, conn):
             lastYear = 5000
         else:
             lastYear = int(estacion[5].split(' ')[3])
-            #print lastYear
+            #print(lastYear)
 
         if(estacion[4] == ''):
             estacion[4] = 2250
@@ -26,7 +26,7 @@ def fillStationsToDB(fileName, conn):
         point = "POINT(%s %s)"%(estacion[2],estacion[3])
         sql = "INSERT INTO cont_estaciones (id,nombre,geom,lastyear,altitude) VALUES (%s, %s,ST_GeomFromText(%s,'4326'),%s,%s) "
 
-        print estacion[1]
+        print(estacion[1])
         cur.execute(sql, (estacion[0], estacion[1],point,lastYear,estacion[4]))
 
     conn.commit()
@@ -40,7 +40,7 @@ def addStations(conn, sqlCont, stationsFile):
         print("Droping table "+currTable+" ...")
         sqlCont.clearTable(conn, currTable)
     else:
-        print "Not droping table!"
+        print("Not droping table!")
 
     # Inserting data
     fillStationsToDB(myStationsFile,conn)
