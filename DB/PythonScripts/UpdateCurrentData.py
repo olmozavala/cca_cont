@@ -9,7 +9,7 @@ from psycopg2 import errorcodes
 from ozdb import Ozdb
 from sqlCont import SqlCont
 from oztools import ContIOTools
-from datetime import date
+from datetime import datetime
 
 def insertToDB( fecha, id_est, value, table, conn):
     """ This function  inserts single values into the specified table """
@@ -30,19 +30,22 @@ def insertToDB( fecha, id_est, value, table, conn):
         conn.rollback()
 
 
-def updateTables(sqlCont, conn, ozTools, tables, parameters, month, year):
+def updateTables(sqlCont, conn, ozTools, tables, parameters, month, year, day, hour):
 
     for idx,table in enumerate(tables):
         cont = parameters[idx]
 
         url = "http://www.aire.df.gob.mx/estadisticas-consultas/concentraciones/respuesta.php?qtipo=HORARIOS&parametro=%s&anio=%s&qmes=%s" % (cont,year,month)
         print(url)
+        
 
         #allRead = pd.read_html("Test.html", header=1)
         allRead = pd.read_html(url, header=1)
 
         data = allRead[0]
         stations = data.keys()
+        newData= data[data['Fecha'] == str(day)+'-'+str(month)+'-'+str(year)];
+        data = newData[newData['Hora']== hour];
 
         for rowId in range(len(data)):
             row = data.ix[rowId]
@@ -58,17 +61,19 @@ conn = sqlCont.getPostgresConn() # Gets a connection to the database
 ozTools= ContIOTools()
 
 # Obtains current month and year
-today = date.today() 
+today = datetime.now(); 
 month = today.month
 year = today.year
+day = today.day
+hour = today.hour
 
 # Updating the contaminantes tables
 tables = ozTools.getTables()
 parameters = ozTools.getContaminants()
-updateTables(sqlCont, conn, ozTools, tables, parameters,month, year)
+updateTables(sqlCont, conn, ozTools, tables, parameters, month, year, day, hour)
 
 # Updating the meteorolgical tables
 tables = ozTools.getMeteoTables()
 parameters = ozTools.getMeteoParams()
-updateTables(sqlCont, conn, ozTools, tables, parameters,month, year)
+updateTables(sqlCont, conn, ozTools, tables, parameters,month, year, day, hour)
 
