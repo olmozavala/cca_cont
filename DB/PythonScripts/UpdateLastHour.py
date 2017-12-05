@@ -24,7 +24,7 @@ def insertToDB( fecha, id_est, value, table, conn):
         if e.pgcode == '25P02':
             print('Failed to insert query, CODE:', e.pgcode, " Detail: ", errorcodes.lookup(e.pgcode[:2]))
         else:
-            print('SOPAS, CODE:', e.pgcode, " Detail: ", errorcodes.lookup(e.pgcode[:2]))
+            print('Failed to insert query, CODE:', e.pgcode, " Detail: ", errorcodes.lookup(e.pgcode[:2]))
 
         cur.close()
         conn.rollback()
@@ -36,6 +36,7 @@ def updateTables(sqlCont, conn, ozTools, tables, parameters, month, year, day, h
         cont = parameters[idx]
 
         url = "http://www.aire.df.gob.mx/estadisticas-consultas/concentraciones/respuesta.php?qtipo=HORARIOS&parametro=%s&anio=%s&qmes=%s" % (cont,year,month)
+        print("Reading data from:")
         print(url)
 
 
@@ -48,6 +49,7 @@ def updateTables(sqlCont, conn, ozTools, tables, parameters, month, year, day, h
         data = newData[newData['Hora']== hour];
         data = data.reset_index(drop=True);
         
+        print("Inserting into DB.....")
         for rowId in range(len(data)):
             row = data.ix[rowId]
             fechaSplit = row[0].split('-')
@@ -55,6 +57,7 @@ def updateTables(sqlCont, conn, ozTools, tables, parameters, month, year, day, h
             for colId in range(2,len(row)):
                 if row[colId] != 'nr':
                     insertToDB(fecha,  stations[colId], row[colId], table, conn)
+        print("Done!")
 
 
 def numString(num):
