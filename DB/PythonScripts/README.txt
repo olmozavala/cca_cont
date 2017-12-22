@@ -1,4 +1,6 @@
-======== FillAndUpdateAirQualityDB =======
+FillAndUpdateAirQualityDB 
+==========================
+
 This file is the one that stores and updates the DB with air pollution data and 
 meteorological data. 
 

@@ -31,7 +31,11 @@ def insertToDB( fecha, id_est, value, table, conn):
 
 
 def updateTables(sqlCont, conn, ozTools, tables, parameters, month, year, day, hour):
+    """ This function  obtains the data for the last month and depending on the received
+    month, year, day and hour it tries to store the last 10 hours into the database.
+    """
 
+    # For each table load the info of current month
     for idx,table in enumerate(tables):
         cont = parameters[idx]
 
@@ -39,13 +43,16 @@ def updateTables(sqlCont, conn, ozTools, tables, parameters, month, year, day, h
         print("Reading data from:")
         print(url)
 
-
         #allRead = pd.read_html("Test.html", header=1)
         allRead = pd.read_html(url, header=1)
+
+        # The data has two columns 'Fecha' and 'Hora' example: 
+        #http://www.aire.df.gob.mx/estadisticas-consultas/concentraciones/respuesta.php?qtipo=HORARIOS&parametro=o3&anio=2017&qmes=12
 
         data = allRead[0]
         stations = data.keys()
         newData= data[data['Fecha'] == numString(day)+'-'+numString(month)+'-'+str(year)];
+        print(newData)
         data = newData[newData['Hora']== hour];
         data = data.reset_index(drop=True);
         
@@ -68,6 +75,7 @@ def numString(num):
 
 sqlCont = SqlCont() # Initializes our main class SqlCont
 conn = sqlCont.getPostgresConn() # Gets a connection to the database
+conn = ['o3']
 ozTools= ContIOTools()
 
 # Obtains current month and year
@@ -79,6 +87,7 @@ hour = today.hour
 
 # Updating the contaminantes tables
 tables = ozTools.getTables()
+tables = ['cont_otres']
 parameters = ozTools.getContaminants()
 updateTables(sqlCont, conn, ozTools, tables, parameters, month, year, day, hour)
 
