@@ -1,6 +1,7 @@
 import sys
 
 sys.path.insert(0, './libs')
+sys.path.insert(0, '/ServerScripts/Air_Quality_DB/libs')
 
 from pandas import Series, DataFrame
 import pandas as pd
