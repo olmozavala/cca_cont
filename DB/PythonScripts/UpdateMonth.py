@@ -1,6 +1,7 @@
 import sys
 
 sys.path.insert(0, './libs')
+sys.path.insert(0, '/ServerScripts/Air_Quality_DB/libs')
 
 from pandas import Series, DataFrame
 import pandas as pd
@@ -80,6 +81,6 @@ parameters = ozTools.getContaminants()
 updateTables(sqlCont, conn, ozTools, tables, parameters, month, year)
 
 # Updating the meteorolgical tables
-tables = ozTools.getMeteoTables()
-parameters = ozTools.getMeteoParams()
-updateTables(sqlCont, conn, ozTools, tables, parameters,month, year)
+#tables = ozTools.getMeteoTables()
+#parameters = ozTools.getMeteoParams()
+#updateTables(sqlCont, conn, ozTools, tables, parameters,month, year)
