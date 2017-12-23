@@ -4,6 +4,7 @@ sys.path.insert(0, './libs')
 
 from pandas import Series, DataFrame
 import pandas as pd
+import numpy as np
 import psycopg2
 from psycopg2 import errorcodes
 from ozdb import Ozdb
@@ -32,8 +33,10 @@ def insertToDB( fecha, id_est, value, table, conn):
 
 def updateTables(sqlCont, conn, ozTools, tables, parameters, month, year, day, hour):
     """ This function  obtains the data for the last month and depending on the received
-    month, year, day and hour it tries to store the last 10 hours into the database.
+    month, year, day and hour it tries to store the last readLastHours hours into the database.
     """
+
+    readLastHours = 3# How many previous hours are we going to read
 
     # For each table load the info of current month
     for idx,table in enumerate(tables):
@@ -51,18 +54,43 @@ def updateTables(sqlCont, conn, ozTools, tables, parameters, month, year, day, h
 
         data = allRead[0]
         stations = data.keys()
-        newData= data[data['Fecha'] == numString(day)+'-'+numString(month)+'-'+str(year)];
-        print(newData)
-        data = newData[newData['Hora']== hour];
+
+        # From which hour we will try to insert  data
+        fromHour = (hour - readLastHours) % 24
+
+        # Today and yesterday dates as strings
+        yesterdayStr = numString(day-1)+'-'+numString(month)+'-'+str(year);
+        todayStr = numString(day)+'-'+numString(month)+'-'+str(year);
+        #print(yesterdayStr)
+        #print(todayStr)
+
+        # In this case we need to read hours from the previous day
+        #print('hour: ', hour)
+        #print('formhour: ', fromHour)
+        if hour <= fromHour:
+            # Read all from today and only hours above fromHour from yesterday
+            dataIndex = np.logical_or(data['Fecha'] == todayStr, \
+                        np.logical_and(data['Fecha'] == yesterdayStr, data['Hora'] >= fromHour))
+        else:
+            # Read  hours above fromHour from today
+            dataIndex = np.logical_and(data['Fecha'] == todayStr, data['Hora'] >= fromHour)
+            
+        # Reduce the size of the original data using the previously calculated index
+        TodayData = data[dataIndex]
+
+        # Read the previous readLastHours hours
+        data = TodayData
         data = data.reset_index(drop=True);
         
-        print("Inserting into DB.....")
+        print("Inserting into DB table ", table, " .....")
         for rowId in range(len(data)):
             row = data.ix[rowId]
             fechaSplit = row[0].split('-')
-            fecha = fechaSplit[1]+'/'+fechaSplit[0]+'/'+fechaSplit[2]+' '+str(row[1])+':00:00'
+            # TODO be sure that the hour is the correct hour (from 0 to 23 in the DB)
+            fecha = fechaSplit[1]+'/'+fechaSplit[0]+'/'+fechaSplit[2]+' '+str(row[1]-1)+':00:00'
             for colId in range(2,len(row)):
                 if row[colId] != 'nr':
+                    #print(fecha,  stations[colId], row[colId], table, conn)
                     insertToDB(fecha,  stations[colId], row[colId], table, conn)
         print("Done!")
 
@@ -75,7 +103,6 @@ def numString(num):
 
 sqlCont = SqlCont() # Initializes our main class SqlCont
 conn = sqlCont.getPostgresConn() # Gets a connection to the database
-conn = ['o3']
 ozTools= ContIOTools()
 
 # Obtains current month and year
@@ -87,7 +114,6 @@ hour = today.hour
 
 # Updating the contaminantes tables
 tables = ozTools.getTables()
-tables = ['cont_otres']
 parameters = ozTools.getContaminants()
 updateTables(sqlCont, conn, ozTools, tables, parameters, month, year, day, hour)
 

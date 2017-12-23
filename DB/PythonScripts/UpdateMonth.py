@@ -23,8 +23,10 @@ def insertToDB( fecha, id_est, value, table, conn):
     #except psycopg2.IntegrityError as e:
         if e.pgcode == '25P02':
             print('Failed to insert query, CODE:', e.pgcode, " Detail: ", errorcodes.lookup(e.pgcode[:2]))
+            print(sql)
         else:
             print('Failed to insert query, CODE:', e.pgcode, " Detail: ", errorcodes.lookup(e.pgcode[:2]))
+            print(sql)
 
         cur.close()
         conn.rollback()
@@ -39,14 +41,13 @@ def updateTables(sqlCont, conn, ozTools, tables, parameters, month, year):
         print("Reading data from:")
         print(url)
 
-
         allRead = pd.read_html(url, header=1)
 
         data = allRead[0]
         stations = data.keys()
         data = data.reset_index(drop=True);
         
-        print("Inserting into DB.....")
+        print("Inserting into DB for table ", table, " .....")
         for rowId in range(len(data)):
             row = data.ix[rowId]
             fechaSplit = row[0].split('-')
@@ -56,7 +57,6 @@ def updateTables(sqlCont, conn, ozTools, tables, parameters, month, year):
                     insertToDB(fecha,  stations[colId], row[colId], table, conn)
 
         print("Done!")
-
 
 def numString(num):
     if num < 10:
