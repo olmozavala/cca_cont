@@ -37,7 +37,7 @@ def updateTables(sqlCont, conn, ozTools, tables, parameters, month, year, day, h
     month, year, day and hour it tries to store the last readLastHours hours into the database.
     """
 
-    readLastHours = 3# How many previous hours are we going to read
+    readLastHours = 10# How many previous hours are we going to read
 
     # For each table load the info of current month
     for idx,table in enumerate(tables):
