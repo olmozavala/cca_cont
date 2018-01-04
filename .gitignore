@@ -13,3 +13,4 @@
 *.csv
 *.pyc
 *.swp
+/WebService/dist/
