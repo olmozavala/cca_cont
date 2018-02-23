@@ -49,12 +49,14 @@ public class GenericResource {
 	 * @return an instance of java.lang.String
 	 */
 	@GET
-	@Path("/{particula}/{id_est}/{fecha}/{hora}")
+	@Path("/{particula}/{id_est}/{fecha}/{hora}/{dias}")
 	@Produces(MediaType.APPLICATION_JSON)
-	public String getContOtres(@PathParam("particula") String particula, @PathParam("id_est") String id_est, @PathParam("fecha") String fecha, @PathParam("hora") String hora) {
+	public String getContOtres(@PathParam("particula") String particula, @PathParam("id_est") String id_est, @PathParam("fecha") String fecha, @PathParam("hora") String hora, @PathParam("dias") String dias) {
+        /*Create connection to DB*/
 		Conection miConection = new Conection("soloread", "SH3<t!4e", "contingencia");
 		Connection con = miConection.getConnection();
 		
+        /*declaring sentences we going to use*/
 		String sql = "";
 		String sql_ = "";
 		String sql_check = "";
@@ -68,12 +70,14 @@ public class GenericResource {
 		DateFormat formatter ;
 		Date datey ;
 		formatter = new SimpleDateFormat("yyyy-MM-dd HH");
+        /*parse dias as Int*/
+        int ndays = Integer.parseInt(dias);
 		
 		try {
 			// We parse the current date and time and create
-			// two dates, one +24 and one -24 from the recuested date.
+			// two dates, one +24 and one -ndays from the recuested date.
 			datey = formatter.parse(fecha+' '+hora);
-			Date date1= addDays(datey,-1);
+			Date date1= addDays(datey,-ndays);
 			Date date2 = addDays(datey,1);
 			
 			DateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
@@ -85,22 +89,18 @@ public class GenericResource {
 			try{
 				//*************** Reading data from the stations ***************
 				jsonResult += "{ \"report\" :[";
-				//sql = "SELECT row_to_json(t) FROM (SELECT fecha,val FROM cont_otres WHERE fecha >='"+str_date1+"' AND fecha < '"+str_datey+"' AND id_est='"+id_est+"') t;";
-//				sql = "SELECT fecha,val FROM cont_"+particula+" WHERE fecha >='"+str_date1+"' AND fecha < '"+str_datey+"' AND id_est='"+id_est+"';";
 				// In this case we are using the interval function to select the dates
 				sql = "SELECT fecha,val FROM cont_"+particula+" WHERE fecha <@ tsrange('"+str_date1+"','"+str_datey+"', '[)') AND id_est='"+id_est+"';";
 				sentencia = con.createStatement();
 				resultado = sentencia.executeQuery(sql);
 				
 				while(resultado.next()){
-					//jsonResult+="[\""+resultado.getString(1).replace(' ','T')+"Z\","+resultado.getString(2)+"]";
 					jsonResult+="[\""+resultado.getString(1)+"\","+resultado.getString(2)+"]";
 					if (!resultado.isLast()) {
 						// last iteration
 						jsonResult+=",";
 					}
 				}
-				
 			
 				resultado.close();
 				sentencia.close();
@@ -110,19 +110,11 @@ public class GenericResource {
 				
 				//check if forecast exists
 				//SELECT to_regclass('public.forecast_otres');
-				/*sql_check = "SELECT to_regclass('public.forecast_"+particula+"');";
-				sentencia_check = con.createStatement();
-				resultado_check = sentencia_check.executeQuery(sql_check);
-				while(resultado_check.next()){*/
-				//sql_ = "SELECT row_to_json(t) FROM (SELECT fecha,val FROM forecast_otres WHERE fecha >='"+str_date1+"' AND fecha < '"+str_date2+"' AND id_est='"+id_est+"') t;";
-//				sql_ = "SELECT fecha,val FROM forecast_"+particula+" WHERE fecha >='"+str_date1+"' AND fecha < '"+str_date2+"' AND id_est='"+id_est+"';";
 				sql_ = "SELECT fecha,val FROM forecast_"+particula+" WHERE fecha <@ tsrange('"+str_date1+"','"+str_date2+"', '[)') AND id_est='"+id_est+"';";
 				sentencia_ = con.createStatement();
 				resultado_ = sentencia_.executeQuery(sql_);
 				
 				while(resultado_.next()){
-					//jsonResult+=resultado_.getString(1);
-					//jsonResult+="[\""+resultado_.getString(1).replace(' ','T')+"Z\","+resultado_.getString(2)+"]";
 					jsonResult+="[\""+resultado_.getString(1)+"\","+resultado_.getString(2)+"]";
 					if (!resultado_.isLast()) {
 						// last iteration

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+  <!-- Basic Page Needs
+  –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+  <meta charset="utf-8">
+  <title>Contaminantes</title>
+  <meta name="description" content="">
+  <meta name="author" content="Ixchel">
+
+  <!-- Mobile Specific Metas
+  –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- FONT
+  –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+  <link href="//fonts.googleapis.com/css?family=Raleway:400,300,600" rel="stylesheet" type="text/css">
+
+  <!-- CSS
+  –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+  <link rel="stylesheet" href="css/normalize.css">
+  <link rel="stylesheet" href="css/skeleton.css">
+  <link rel="stylesheet" id="themeCSS" href="css/iThing-min.css"> 
+  <link rel="stylesheet" href="css/custom.css">
+  <link rel="stylesheet" href="lib/jquery-ui/css/smoothness/jquery-ui-1.8.10.custom.css">
+
+  <!-- Favicon
+  –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+  <link rel="icon" type="image/png" href="images/favicon.png">
+
+  <!-- Javascript -->
+  <script src="http://code.jquery.com/jquery-1.10.2.min.js"></script>
+  <script src="http://code.jquery.com/ui/1.10.3/jquery-ui.min.js"></script>
+  <script src="lib/highcharts.js"></script>
+  <script src="lib/data.js"></script>
+  <script src="lib/exporting.js"></script>
+  <script src="lib/pollutantCharts.js"></script>
+</head>
+<body>
+
+  <!-- Primary Page Layout
+  –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+  <div class="container">
+    <header class="major">
+      <h4>Contaminantes</h4>
+          <div class="row">
+            <!--div id="slider" class="eight columns"></div-->
+            <div class="six columns">
+              <label for="datepicker">Fecha</label> 
+              <input class="u-full-width" type="text" id="datepicker">
+            </div>
+            <div class="six columns">
+              <label for="slct_pollutant">Contaminante</label>
+              <select class="u-full-width" id="slct_pollutant">
+                <option value="otres" selected="selected">Ozono</option>
+                <option value="sodos">Dióxido de azufre</option>
+                <option value="nox">Óxidos de nitrógeno</option>
+                <option value="pmdiez">PM10</option>
+                <option value="co">Monóxido de carbono</option>
+              </select>
+            </div>
+          </div>
+    </header>
+  </div>
+  <div class="container_charts">
+    <div id="all_charts" class="row">
+    </div>
+  </div>
+<!-- End Document
+  –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+  <script src="lib/script.js"></script>
+</body>
+</html>
