@@ -18,9 +18,12 @@ def insertToDB( fecha, id_est, value, table, conn):
     dateFormat = "MM/DD/YYY/HH24"
     sql =  "SET TimeZone='UTC'; INSERT INTO %s (fecha, val, id_est) VALUES (to_timestamp('%s','%s'), '%s', '%s')\n" % (table, fecha,  dateFormat, value, id_est)
     cur = conn.cursor();
+    cur.execute(sql);
+    conn.commit()
     try:
-        cur.execute(sql);
-        conn.commit()
+        print('nel')
+        #cur.execute(sql);
+        #conn.commit()
     except psycopg2.DatabaseError as e:
     #except psycopg2.IntegrityError as e:
         if e.pgcode == '25P02':
@@ -43,7 +46,7 @@ def updateTables(sqlCont, conn, ozTools, tables, parameters, month, year, day, h
     for idx,table in enumerate(tables):
         cont = parameters[idx]
 
-        url = "http://www.aire.df.gob.mx/estadisticas-consultas/concentraciones/respuesta.php?qtipo=HORARIOS&parametro=%s&anio=%s&qmes=%s" % (cont,year,month)
+        url = "http://www.aire.cdmx.gob.mx/estadisticas-consultas/concentraciones/respuesta.php?qtipo=HORARIOS&parametro=%s&anio=%s&qmes=%s" % (cont,year,month)
         print("Reading data from:")
         print(url)
 
@@ -88,7 +91,7 @@ def updateTables(sqlCont, conn, ozTools, tables, parameters, month, year, day, h
             row = data.ix[rowId]
             fechaSplit = row[0].split('-')
             # TODO be sure that the hour is the correct hour (from 0 to 23 in the DB)
-            fecha = fechaSplit[1]+'/'+fechaSplit[0]+'/'+fechaSplit[2]+' '+str(row[1]-1)+':00:00'
+            fecha = fechaSplit[1]+'/'+fechaSplit[0]+'/'+fechaSplit[2]+' '+str(row[1])+':00:00'
             for colId in range(2,len(row)):
                 if row[colId] != 'nr':
                     #print(fecha,  stations[colId], row[colId], table, conn)

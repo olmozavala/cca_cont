@@ -38,7 +38,7 @@ def updateTables(sqlCont, conn, ozTools, tables, parameters, month, year):
     for idx,table in enumerate(tables):
         cont = parameters[idx]
 
-        url = "http://www.aire.df.gob.mx/estadisticas-consultas/concentraciones/respuesta.php?qtipo=HORARIOS&parametro=%s&anio=%s&qmes=%s" % (cont,year,month)
+        url = "http://www.aire.cdmx.gob.mx/estadisticas-consultas/concentraciones/respuesta.php?qtipo=HORARIOS&parametro=%s&anio=%s&qmes=%s" % (cont,year,month)
         print("Reading data from:")
         print(url)
 
