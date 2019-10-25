@@ -35,3 +35,5 @@ wget http://148.243.232.112:8080/opendata/anuales_horarios/contaminantes_2013.cs
 wget http://148.243.232.112:8080/opendata/anuales_horarios/contaminantes_2014.csv
 wget http://148.243.232.112:8080/opendata/anuales_horarios/contaminantes_2015.csv
 wget http://148.243.232.112:8080/opendata/anuales_horarios/contaminantes_2016.csv
+wget http://148.243.232.112:8080/opendata/anuales_horarios/contaminantes_2017.csv
+wget http://148.243.232.112:8080/opendata/anuales_horarios/contaminantes_2018.csv

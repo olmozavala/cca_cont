@@ -1,16 +1,16 @@
 __author__="Olmo S. Zavala Romero"
 
 import sys
-sys.path.insert(0, '/home/olmozavala/Dropbox/TutorialsByMe/Python/PythonExamples/OZLIB/DB')
-sys.path.insert(0, './libs')
+# sys.path.insert(0, '/home/olmozavala/Dropbox/TutorialsByMe/Python/PythonExamples/OZLIB/DB')
+# sys.path.insert(0, './libs')
 
 import psycopg2
-from ozdb import Ozdb
-from sqlCont import SqlCont
-from oztools import ContIOTools
+from libs.ozdb import Ozdb
+from libs.sqlCont import SqlCont
+from libs.oztools import ContIOTools
 
-import addUnits
-import addStations
+import libs.addUnits as addUnits
+import libs.addStations as addStations
 
 def fillData(conn, ozTools, sqlCont, fromY, toY, files, tables):
     """ This function is used to add historic data from yearly files"""
@@ -31,8 +31,8 @@ def fillData(conn, ozTools, sqlCont, fromY, toY, files, tables):
 
 if __name__ == "__main__":
 
-    sqlCont = SqlCont() # Initializes our main class SqlCont
-    conn = sqlCont.getPostgresConn() # Gets a connection to the database
+    sqlCont = SqlCont()  # Initializes our main class SqlCont
+    conn = sqlCont.getPostgresConn()  # Gets a connection to the database
     ozTools= ContIOTools()
 
     # This section is for adding Units into the database

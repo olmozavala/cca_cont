@@ -3,7 +3,7 @@ import psycopg2
 import netrc
 
 class SqlCont:
-    """ This class contains SQL methods to inserte, update and delete inside tables"""
+    """ This class contains SQL methods to insert, update and delete inside tables"""
 
     def __init__(self):
         """Constructor of the class"""
@@ -13,11 +13,15 @@ class SqlCont:
         secrets = netrc.netrc()
         login, account, passw = secrets.hosts['OWGIS']
 
+        # host ='132.248.8.238'
+        host ='localhost'
         #For Posgresql only
         try:
-            conn = psycopg2.connect(database="contingencia", user=login, host='132.248.8.238', password=passw)
+            conn = psycopg2.connect(database="contingencia", user=login, host=host, password=passw)
         except:
             print("Failed to connect to database")
+
+        print(F"Connected to {host}")
 
         return conn
 
@@ -31,7 +35,7 @@ class SqlCont:
 
     def delFromYear(self,year,tables,conn):
         """ Deletes some years of data from a table"""
-        text = "Are you sure you want to delete from year: %s (Y or N)? " % (year)
+        text = F"Are you sure you want to delete everything from year: {year} (Y or N) \t (tables) {tables}? "
         ans = input(text)
         if ans.lower() == 'y':
             cur = conn.cursor();

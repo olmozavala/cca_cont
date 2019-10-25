@@ -3,14 +3,33 @@ import sys
 sys.path.insert(0, './libs')
 sys.path.insert(0, '/ServerScripts/Air_Quality_DB/libs')
 
-from pandas import Series, DataFrame
 import pandas as pd
 import psycopg2
 from psycopg2 import errorcodes
-from ozdb import Ozdb
-from sqlCont import SqlCont
-from oztools import ContIOTools
-from datetime import datetime
+from libs.sqlCont import SqlCont
+from libs.oztools import ContIOTools
+
+def main():
+    sqlCont = SqlCont()  # Initializes our main class SqlCont
+    conn = sqlCont.getPostgresConn()  # Gets a connection to the database
+    ozTools = ContIOTools()
+
+    # Obtains current month and year
+    dateToUse = input("Which month you want to update (YYYY/MM)? ")
+    splitDate = dateToUse.split('/')
+    year = int(splitDate[0])
+    month = int(splitDate[1])
+
+    # Updating the contaminantes tables
+    tables = ozTools.getTables()
+    parameters = ozTools.getContaminants()
+    updateTables(sqlCont, conn, ozTools, tables, parameters, month, year)
+
+    # Updating the meteorolgical tables
+    # tables = ozTools.getMeteoTables()
+    # parameters = ozTools.getMeteoParams()
+    # updateTables(sqlCont, conn, ozTools, tables, parameters,month, year)
+
 
 def insertToDB( fecha, id_est, value, table, conn):
     """ This function  inserts single values into the specified table """
@@ -20,15 +39,10 @@ def insertToDB( fecha, id_est, value, table, conn):
     try:
         cur.execute(sql);
         conn.commit()
+    except psycopg2.IntegrityError as e:
+        print('Failed to insert query, CODE:', e.pgcode, " Detail: ", errorcodes.lookup(e.pgcode[:2]))
+        print(sql)
     except psycopg2.DatabaseError as e:
-    #except psycopg2.IntegrityError as e:
-        if e.pgcode == '25P02':
-            print('Failed to insert query, CODE:', e.pgcode, " Detail: ", errorcodes.lookup(e.pgcode[:2]))
-            print(sql)
-        else:
-            print('Failed to insert query, CODE:', e.pgcode, " Detail: ", errorcodes.lookup(e.pgcode[:2]))
-            print(sql)
-
         cur.close()
         conn.rollback()
 
@@ -65,22 +79,7 @@ def numString(num):
     else:
         return str(num);
 
-sqlCont = SqlCont() # Initializes our main class SqlCont
-conn = sqlCont.getPostgresConn() # Gets a connection to the database
-ozTools= ContIOTools()
+if __name__ == "__main__":
+    main()
 
-# Obtains current month and year
-dateToUse= input("Which month you want to update (YYYY/MM)? ")
-splitDate = dateToUse.split('/')
-year = int(splitDate[0])
-month = int(splitDate[1])
 
-# Updating the contaminantes tables
-tables = ozTools.getTables()
-parameters = ozTools.getContaminants()
-updateTables(sqlCont, conn, ozTools, tables, parameters, month, year)
-
-# Updating the meteorolgical tables
-#tables = ozTools.getMeteoTables()
-#parameters = ozTools.getMeteoParams()
-#updateTables(sqlCont, conn, ozTools, tables, parameters,month, year)

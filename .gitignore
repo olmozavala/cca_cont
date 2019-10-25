@@ -11,6 +11,7 @@
 /Matlab/Figures/
 /Tesis_Distribucion_Espacial_de_Ozono_Guadalajara.docx
 /WRF/
+*.idea
 *.csv
 *.pyc
 *.swp

@@ -1,56 +1,71 @@
 import sys
 
-sys.path.insert(0, './libs')
-sys.path.insert(0, '/ServerScripts/Air_Quality_DB/libs')
+# sys.path.insert(0, './libs')
+# sys.path.insert(0, '/ServerScripts/Air_Quality_DB/libs')
 
 from pandas import Series, DataFrame
 import pandas as pd
 import numpy as np
 import psycopg2
 from psycopg2 import errorcodes
-from ozdb import Ozdb
-from sqlCont import SqlCont
-from oztools import ContIOTools
+from libs.ozdb import Ozdb
+from libs.sqlCont import SqlCont
+from libs.oztools import ContIOTools
 from datetime import datetime
+
+def main():
+    sqlCont = SqlCont()  # Initializes our main class SqlCont
+    conn = sqlCont.getPostgresConn()  # Gets a connection to the database
+    ozTools = ContIOTools() # Initialize 'helper' object
+
+    # Obtains current month and year
+    today = datetime.now();
+    month = today.month
+    year = today.year
+    day = today.day
+    hour = today.hour
+
+    readLastHours = 10
+
+    # Updating the contaminantes tables
+    tables = ozTools.getTables()
+    parameters = ozTools.getContaminants()
+    print(F"Updating pollutants tables with the last {readLastHours} hours")
+    updateTables(sqlCont, conn, ozTools, tables, parameters, month, year, day, hour, readLastHours=readLastHours)
+
+    # Updating the meteorolgical tables
+    tables = ozTools.getMeteoTables()
+    parameters = ozTools.getMeteoParams()
+    updateTables(sqlCont, conn, ozTools, tables, parameters, month, year, day, hour, readLastHours=readLastHours)
 
 def insertToDB( fecha, id_est, value, table, conn):
     """ This function  inserts single values into the specified table """
     dateFormat = "MM/DD/YYY/HH24"
     sql =  "SET TimeZone='UTC'; INSERT INTO %s (fecha, val, id_est) VALUES (to_timestamp('%s','%s'), '%s', '%s')\n" % (table, fecha,  dateFormat, value, id_est)
     cur = conn.cursor();
-    cur.execute(sql);
-    conn.commit()
     try:
-        print('nel')
-        #cur.execute(sql);
-        #conn.commit()
-    except psycopg2.DatabaseError as e:
-    #except psycopg2.IntegrityError as e:
-        if e.pgcode == '25P02':
-            print('Failed to insert query, CODE:', e.pgcode, " Detail: ", errorcodes.lookup(e.pgcode[:2]))
-        else:
-            print('Failed to insert query, CODE:', e.pgcode, " Detail: ", errorcodes.lookup(e.pgcode[:2]))
+        cur.execute(sql);
+        conn.commit()
+    except psycopg2.IntegrityError as e:
+        # print('Failed to insert query, CODE:', e.pgcode, " Detail: ", errorcodes.lookup(e.pgcode[:2]))
+        print("Row already existed!")
 
+    except psycopg2.DatabaseError as e:
         cur.close()
         conn.rollback()
 
 
-def updateTables(sqlCont, conn, ozTools, tables, parameters, month, year, day, hour):
+def updateTables(sqlCont, conn, ozTools, tables, parameters, month, year, day, hour, readLastHours=10):
     """ This function  obtains the data for the last month and depending on the received
     month, year, day and hour it tries to store the last readLastHours hours into the database.
     """
-
-    readLastHours = 10# How many previous hours are we going to read
-
     # For each table load the info of current month
     for idx,table in enumerate(tables):
         cont = parameters[idx]
 
         url = "http://www.aire.cdmx.gob.mx/estadisticas-consultas/concentraciones/respuesta.php?qtipo=HORARIOS&parametro=%s&anio=%s&qmes=%s" % (cont,year,month)
-        print("Reading data from:")
-        print(url)
+        print(F"Reading data from: {url}")
 
-        #allRead = pd.read_html("Test.html", header=1)
         allRead = pd.read_html(url, header=1)
 
         # The data has two columns 'Fecha' and 'Hora' example: 
@@ -65,12 +80,9 @@ def updateTables(sqlCont, conn, ozTools, tables, parameters, month, year, day, h
         # Today and yesterday dates as strings
         yesterdayStr = numString(day-1)+'-'+numString(month)+'-'+str(year);
         todayStr = numString(day)+'-'+numString(month)+'-'+str(year);
-        #print(yesterdayStr)
-        #print(todayStr)
+        print(F"Yesterday str: {yesterdayStr}   Today str: {todayStr} From hour: {fromHour}")
 
         # In this case we need to read hours from the previous day
-        #print('hour: ', hour)
-        #print('formhour: ', fromHour)
         if hour <= fromHour:
             # Read all from today and only hours above fromHour from yesterday
             dataIndex = np.logical_or(data['Fecha'] == todayStr, \
@@ -84,11 +96,11 @@ def updateTables(sqlCont, conn, ozTools, tables, parameters, month, year, day, h
 
         # Read the previous readLastHours hours
         data = TodayData
-        data = data.reset_index(drop=True);
+        data = data.reset_index(drop=True)
         
         print("Inserting into DB table ", table, " .....")
         for rowId in range(len(data)):
-            row = data.ix[rowId]
+            row = data.iloc[rowId]
             fechaSplit = row[0].split('-')
             # TODO be sure that the hour is the correct hour (from 0 to 23 in the DB)
             fecha = fechaSplit[1]+'/'+fechaSplit[0]+'/'+fechaSplit[2]+' '+str(row[1])+':00:00'
@@ -105,23 +117,6 @@ def numString(num):
     else:
         return str(num);
 
-sqlCont = SqlCont() # Initializes our main class SqlCont
-conn = sqlCont.getPostgresConn() # Gets a connection to the database
-ozTools= ContIOTools()
 
-# Obtains current month and year
-today = datetime.now();
-month = today.month
-year = today.year
-day = today.day
-hour = today.hour
-
-# Updating the contaminantes tables
-tables = ozTools.getTables()
-parameters = ozTools.getContaminants()
-updateTables(sqlCont, conn, ozTools, tables, parameters, month, year, day, hour)
-
-# Updating the meteorolgical tables
-tables = ozTools.getMeteoTables()
-parameters = ozTools.getMeteoParams()
-updateTables(sqlCont, conn, ozTools, tables, parameters,month, year, day, hour)
+if __name__ == "__main__":
+    main()
