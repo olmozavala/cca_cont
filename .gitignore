@@ -1,5 +1,7 @@
 /EXTRA_NOT_USED
 /DB/DataBackup
+/DB/BK_ALL_DB
+/DB/DBSchema/*.bak
 /CCA_Contingencia.zip
 /DB/PythonScripts/.netrc
 /DB/PythonScripts/OldVersion/
@@ -11,6 +13,7 @@
 /Matlab/Figures/
 /Tesis_Distribucion_Espacial_de_Ozono_Guadalajara.docx
 /WRF/
+*.netrc
 *.idea
 *.csv
 *.pyc
