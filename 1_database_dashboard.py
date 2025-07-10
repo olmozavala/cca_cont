@@ -1,19 +1,17 @@
+from typing import List, Dict, Any
 import dash
 from dash import dcc, html, Input, Output, callback
-import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import pandas as pd
-import psycopg2
-from sqlalchemy import create_engine
 import os
 
 # Initialize the Dash app
 app = dash.Dash(__name__)
 
 # Import database utilities and queries
-from db_utils.sql_common import POLLUTANT_MAPPING
-from db_utils.queries import get_stations_data, get_station_name, get_pollutant_data
+from db_utils.sql_con import POLLUTANT_MAPPING, METEOROLOGY_MAPPING
+from db_utils.queries_select import get_stations_data, get_station_name, get_pollutant_data, get_meteorology_data
 
 # Dashboard configuration
 DASHBOARD_CONFIG = {
@@ -39,8 +37,8 @@ app.layout = html.Div([
              style={'textAlign': 'center', 'marginBottom': 30}),
     
     dcc.Tabs([
-        # Tab 1: By Station
-        dcc.Tab(label="By Station", children=[
+        # Tab 1: Pollution By Station
+        dcc.Tab(label="Pollution By Station", children=[
             html.Div([
                 # Controls row
                 html.Div([
@@ -70,9 +68,9 @@ app.layout = html.Div([
                             min=1,
                             max=24*30*6,  # 6 months in hours
                             step=1,
-                            value=7*24,  # 7 days default
+                            value=12*24,  # 12 days default
                             marks={i: f'{i//24}d' if i % 24 == 0 else f'{i}h' 
-                                   for i in [1, 24, 7*24, 30*24, 90*24, 180*24]},
+                                   for i in [1, 24, 7*24, 10*24, 30*24, 90*24, 180*24]},
                             tooltip={"placement": "bottom", "always_visible": True}
                         )
                     ], style={'display': 'inline-block', 'width': '700px', 'marginTop': '10px'})
@@ -118,6 +116,80 @@ app.layout = html.Div([
                         html.Div([
                             html.H4("Carbon dioxide (CO₂)"),
                             dcc.Graph(id='plot-sodos', style={'height': '450px'})
+                        ], style={'width': '50%', 'display': 'inline-block'})
+                    ])
+                ])
+            ])
+        ]),
+        
+        # Tab 2: Meteorology By Station
+        dcc.Tab(label="Meteorology By Station", children=[
+            html.Div([
+                # Controls row
+                html.Div([
+                    html.Div([
+                        html.Label("Station:"),
+                        dcc.Dropdown(
+                            id='met-station-dropdown',
+                            options=get_stations_list(),
+                            value='MER',
+                            style={'width': '250px'}
+                        )
+                    ], style={'display': 'inline-block', 'marginRight': '20px'}),
+                    
+                    html.Div([
+                        html.Label("Start Date:"),
+                        dcc.DatePickerSingle(
+                            id='met-date-picker',
+                            date=(datetime.now() - timedelta(days=10)).strftime('%Y-%m-%d'),
+                            style={'width': '200px'}
+                        )
+                    ], style={'display': 'inline-block', 'marginRight': '20px'}),
+                    
+                    html.Div([
+                        html.Label("Window Size (hours):", style={'fontSize': '16px', 'fontWeight': 'bold'}),
+                        dcc.Slider(
+                            id='met-window-slider',
+                            min=1,
+                            max=24*30*6,  # 6 months in hours
+                            step=1,
+                            value=12*24,  # 12 days default
+                            marks={i: f'{i//24}d' if i % 24 == 0 else f'{i}h' 
+                                   for i in [1, 24, 7*24, 10*24, 30*24, 90*24, 180*24]},
+                            tooltip={"placement": "bottom", "always_visible": True}
+                        )
+                    ], style={'display': 'inline-block', 'width': '700px', 'marginTop': '10px'})
+                ], style={'marginBottom': '20px'}),
+                
+                # Meteorology plots - 2x3 grid
+                html.Div([
+                    # Row 1
+                    html.Div([
+                        html.Div([
+                            html.H4("Atmospheric pressure (PBA)"),
+                            dcc.Graph(id='plot-pba', style={'height': '450px'})
+                        ], style={'width': '50%', 'display': 'inline-block'}),
+                        html.Div([
+                            html.H4("Relative humidity (RH)"),
+                            dcc.Graph(id='plot-rh', style={'height': '450px'})
+                        ], style={'width': '50%', 'display': 'inline-block'})
+                    ]),
+                    # Row 2
+                    html.Div([
+                        html.Div([
+                            html.H4("Temperature (TMP)"),
+                            dcc.Graph(id='plot-tmp', style={'height': '450px'})
+                        ], style={'width': '50%', 'display': 'inline-block'}),
+                        html.Div([
+                            html.H4("Wind direction (WDR)"),
+                            dcc.Graph(id='plot-wdr', style={'height': '450px'})
+                        ], style={'width': '50%', 'display': 'inline-block'})
+                    ]),
+                    # Row 3 - Single plot for Wind speed
+                    html.Div([
+                        html.Div([
+                            html.H4("Wind speed (WSP)"),
+                            dcc.Graph(id='plot-wsp', style={'height': '450px'})
                         ], style={'width': '50%', 'display': 'inline-block'})
                     ])
                 ])
@@ -210,6 +282,83 @@ def update_all_pollutant_plots(selected_station, date, window_hours):
     
     return figures
 
+
+# Callback to update all meteorology plots
+@app.callback(
+    [Output('plot-pba', 'figure'),
+     Output('plot-rh', 'figure'),
+     Output('plot-tmp', 'figure'),
+     Output('plot-wdr', 'figure'),
+     Output('plot-wsp', 'figure')],
+    [Input('met-station-dropdown', 'value'),
+     Input('met-date-picker', 'date'),
+     Input('met-window-slider', 'value')]
+)
+def update_all_meteorology_plots(selected_station, date, window_hours):
+    """Update all meteorology plots based on selected station and parameters."""
+    if not selected_station:
+        empty_fig = go.Figure().add_annotation(
+            text="No station selected",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False
+        )
+        return [empty_fig] * 5  # Return empty figures for all 5 meteorology fields
+    
+    start_date = datetime.fromisoformat(date.replace('-', '-'))
+    station_display_name = get_station_name(selected_station)
+    
+    # Define meteorology fields and their plot IDs
+    meteorology_fields = ['pba', 'rh', 'tmp', 'wdr', 'wsp']
+    
+    figures = []
+    
+    for field in meteorology_fields:
+        df = get_meteorology_data(selected_station, field, start_date, window_hours)
+        
+        if df.empty:
+            fig = go.Figure().add_annotation(
+                text=f"No data available for {METEOROLOGY_MAPPING.get(field, field)}",
+                xref="paper", yref="paper",
+                x=0.5, y=0.5, showarrow=False
+            )
+        else:
+            fig = go.Figure()
+            
+            if selected_station == 'all_stations' and 'id_est' in df.columns:
+                # Plot data for all stations
+                for station in df['id_est'].unique():
+                    station_data = df[df['id_est'] == station]
+                    fig.add_trace(go.Scatter(
+                        x=station_data['fecha'],
+                        y=station_data['val'],
+                        mode='lines+markers',
+                        name=f"Station {station}",
+                        marker=dict(size=3)
+                    ))
+                title = f"All Stations - {METEOROLOGY_MAPPING.get(field, field)}"
+            else:
+                # Plot data for single station
+                fig.add_trace(go.Scatter(
+                    x=df['fecha'],
+                    y=df['val'],
+                    mode='lines+markers',
+                    name=METEOROLOGY_MAPPING.get(field, field),
+                    line=dict(color='blue', width=2),
+                    marker=dict(size=3)
+                ))
+                title = f"{station_display_name} - {METEOROLOGY_MAPPING.get(field, field)}"
+            
+            fig.update_layout(
+                title=title,
+                xaxis_title="Date/Time",
+                yaxis_title="Value",
+                hovermode='x unified',
+                margin=dict(l=50, r=20, t=50, b=50)
+            )
+        
+        figures.append(fig)
+    
+    return figures
 
 
 if __name__ == '__main__':
