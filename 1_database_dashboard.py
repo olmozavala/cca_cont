@@ -317,6 +317,14 @@ def update_all_pollutant_plots(selected_station, date, window_hours):
         )
         return [empty_fig] * 7  # Return empty figures for all 7 pollutants
     
+    if not date:
+        empty_fig = go.Figure().add_annotation(
+            text="No date selected",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False
+        )
+        return [empty_fig] * 7  # Return empty figures for all 7 pollutants
+    
     start_date = datetime.fromisoformat(date.replace('-', '-'))
     station_display_name = get_station_name(selected_station)
     
@@ -390,6 +398,14 @@ def update_all_meteorology_plots(selected_station, date, window_hours):
     if not selected_station:
         empty_fig = go.Figure().add_annotation(
             text="No station selected",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False
+        )
+        return [empty_fig] * 5  # Return empty figures for all 5 meteorology fields
+    
+    if not date:
+        empty_fig = go.Figure().add_annotation(
+            text="No date selected",
             xref="paper", yref="paper",
             x=0.5, y=0.5, showarrow=False
         )
