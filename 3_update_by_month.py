@@ -217,8 +217,8 @@ def main() -> None:
     Now receives year and month as command-line arguments.
     """
     parser = argparse.ArgumentParser(description="Update pollutant and meteorological data by month.")
-    parser.add_argument('--year', type=int, default=2015, help='Year to update (e.g., 2010)')
-    parser.add_argument('--month', type=int, default=1, help='Month to update (1-12)')
+    parser.add_argument('--year', type=int, default=2025, help='Year to update (e.g., 2010)')
+    parser.add_argument('--month', type=int, default=6, help='Month to update (1-12)')
     parser.add_argument('--log-level', type=str, default='INFO', 
                        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'], 
                        help='Set the logging level')
