@@ -11,7 +11,7 @@ app = dash.Dash(__name__)
 
 # Import database utilities and queries
 from db_utils.sql_con import POLLUTANT_MAPPING, METEOROLOGY_MAPPING
-from db_utils.queries_select import get_stations_data, get_station_name, get_pollutant_data, get_meteorology_data
+from db_utils.queries_select import get_stations_data, get_station_name, get_pollutant_data, get_meteorology_data, get_pollutant_availability_data, get_meteorology_availability_data
 
 # Dashboard configuration
 DASHBOARD_CONFIG = {
@@ -196,6 +196,97 @@ app.layout = html.Div([
             ])
         ]),
         
+        # Tab 3: Data Availability
+        dcc.Tab(label="Data Availability", children=[
+            html.Div([
+                # Controls row
+                html.Div([
+                    html.Div([
+                        html.Label("Station:"),
+                        dcc.Dropdown(
+                            id='availability-station-dropdown',
+                            options=get_stations_list(),
+                            value='MER',
+                            style={'width': '250px'}
+                        )
+                    ], style={'display': 'inline-block', 'marginRight': '20px'})
+                ], style={'marginBottom': '20px'}),
+                
+                # Data availability plots - 2-column grid
+                html.Div([
+                    # Row 1 - Pollutants
+                    html.Div([
+                        html.Div([
+                            html.H4("Ozone (O₃) - Data Availability"),
+                            dcc.Graph(id='availability-plot-otres', style={'height': '400px'})
+                        ], style={'width': '50%', 'display': 'inline-block'}),
+                        html.Div([
+                            html.H4("Carbon monoxide (CO) - Data Availability"),
+                            dcc.Graph(id='availability-plot-co', style={'height': '400px'})
+                        ], style={'width': '50%', 'display': 'inline-block'})
+                    ]),
+                    # Row 2 - Pollutants
+                    html.Div([
+                        html.Div([
+                            html.H4("Nitric oxide (NO) - Data Availability"),
+                            dcc.Graph(id='availability-plot-no', style={'height': '400px'})
+                        ], style={'width': '50%', 'display': 'inline-block'}),
+                        html.Div([
+                            html.H4("Nitrogen oxides (NOₓ) - Data Availability"),
+                            dcc.Graph(id='availability-plot-nox', style={'height': '400px'})
+                        ], style={'width': '50%', 'display': 'inline-block'})
+                    ]),
+                    # Row 3 - Pollutants
+                    html.Div([
+                        html.Div([
+                            html.H4("Particulate matter ≤ 10 µm (PM₁₀) - Data Availability"),
+                            dcc.Graph(id='availability-plot-pmdiez', style={'height': '400px'})
+                        ], style={'width': '50%', 'display': 'inline-block'}),
+                        html.Div([
+                            html.H4("Particulate matter ≤ 2.5 µm (PM₂.₅) - Data Availability"),
+                            dcc.Graph(id='availability-plot-pmdoscinco', style={'height': '400px'})
+                        ], style={'width': '50%', 'display': 'inline-block'})
+                    ]),
+                    # Row 4 - Pollutants
+                    html.Div([
+                        html.Div([
+                            html.H4("Carbon dioxide (CO₂) - Data Availability"),
+                            dcc.Graph(id='availability-plot-sodos', style={'height': '400px'})
+                        ], style={'width': '50%', 'display': 'inline-block'})
+                    ]),
+                    # Row 5 - Meteorology
+                    html.Div([
+                        html.Div([
+                            html.H4("Atmospheric pressure (PBA) - Data Availability"),
+                            dcc.Graph(id='availability-plot-pba', style={'height': '400px'})
+                        ], style={'width': '50%', 'display': 'inline-block'}),
+                        html.Div([
+                            html.H4("Relative humidity (RH) - Data Availability"),
+                            dcc.Graph(id='availability-plot-rh', style={'height': '400px'})
+                        ], style={'width': '50%', 'display': 'inline-block'})
+                    ]),
+                    # Row 6 - Meteorology
+                    html.Div([
+                        html.Div([
+                            html.H4("Temperature (TMP) - Data Availability"),
+                            dcc.Graph(id='availability-plot-tmp', style={'height': '400px'})
+                        ], style={'width': '50%', 'display': 'inline-block'}),
+                        html.Div([
+                            html.H4("Wind direction (WDR) - Data Availability"),
+                            dcc.Graph(id='availability-plot-wdr', style={'height': '400px'})
+                        ], style={'width': '50%', 'display': 'inline-block'})
+                    ]),
+                    # Row 7 - Meteorology
+                    html.Div([
+                        html.Div([
+                            html.H4("Wind speed (WSP) - Data Availability"),
+                            dcc.Graph(id='availability-plot-wsp', style={'height': '400px'})
+                        ], style={'width': '50%', 'display': 'inline-block'})
+                    ])
+                ])
+            ])
+        ]),
+        
         # Placeholder for additional tabs
         dcc.Tab(label="Additional Analysis", children=[
             html.H3("Additional analysis tabs will be added here")
@@ -353,6 +444,115 @@ def update_all_meteorology_plots(selected_station, date, window_hours):
                 xaxis_title="Date/Time",
                 yaxis_title="Value",
                 hovermode='x unified',
+                margin=dict(l=50, r=20, t=50, b=50)
+            )
+        
+        figures.append(fig)
+    
+    return figures
+
+
+# Callback to update all data availability plots
+@app.callback(
+    [Output('availability-plot-otres', 'figure'),
+     Output('availability-plot-co', 'figure'),
+     Output('availability-plot-no', 'figure'),
+     Output('availability-plot-nox', 'figure'),
+     Output('availability-plot-pmdiez', 'figure'),
+     Output('availability-plot-pmdoscinco', 'figure'),
+     Output('availability-plot-sodos', 'figure'),
+     Output('availability-plot-pba', 'figure'),
+     Output('availability-plot-rh', 'figure'),
+     Output('availability-plot-tmp', 'figure'),
+     Output('availability-plot-wdr', 'figure'),
+     Output('availability-plot-wsp', 'figure')],
+    [Input('availability-station-dropdown', 'value')]
+)
+def update_all_availability_plots(selected_station):
+    """Update all data availability plots based on selected station."""
+    if not selected_station:
+        empty_fig = go.Figure().add_annotation(
+            text="No station selected",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False
+        )
+        return [empty_fig] * 12  # Return empty figures for all 12 plots
+    
+    station_display_name = get_station_name(selected_station)
+    
+    # Define pollutants and meteorology fields
+    pollutants = ['otres', 'co', 'no', 'nox', 'pmdiez', 'pmdoscinco', 'sodos']
+    meteorology_fields = ['pba', 'rh', 'tmp', 'wdr', 'wsp']
+    
+    figures = []
+    
+    # Process pollutant availability plots
+    for pollutant in pollutants:
+        df = get_pollutant_availability_data(selected_station, pollutant)
+        
+        if df.empty:
+            fig = go.Figure().add_annotation(
+                text=f"No data available for {POLLUTANT_MAPPING.get(pollutant, pollutant)}",
+                xref="paper", yref="paper",
+                x=0.5, y=0.5, showarrow=False
+            )
+        else:
+            fig = go.Figure()
+            
+            # Create bar chart
+            fig.add_trace(go.Bar(
+                x=df['month'],
+                y=df['count'],
+                name=POLLUTANT_MAPPING.get(pollutant, pollutant),
+                marker_color='red'
+            ))
+            
+            title = f"{station_display_name} - {POLLUTANT_MAPPING.get(pollutant, pollutant)} Data Availability"
+            
+            fig.update_layout(
+                title=title,
+                xaxis_title="Month",
+                yaxis_title="Hourly Data Count",
+                xaxis=dict(
+                    range=['2000-01-01', '2025-12-31'],
+                    type='date'
+                ),
+                margin=dict(l=50, r=20, t=50, b=50)
+            )
+        
+        figures.append(fig)
+    
+    # Process meteorology availability plots
+    for field in meteorology_fields:
+        df = get_meteorology_availability_data(selected_station, field)
+        
+        if df.empty:
+            fig = go.Figure().add_annotation(
+                text=f"No data available for {METEOROLOGY_MAPPING.get(field, field)}",
+                xref="paper", yref="paper",
+                x=0.5, y=0.5, showarrow=False
+            )
+        else:
+            fig = go.Figure()
+            
+            # Create bar chart
+            fig.add_trace(go.Bar(
+                x=df['month'],
+                y=df['count'],
+                name=METEOROLOGY_MAPPING.get(field, field),
+                marker_color='blue'
+            ))
+            
+            title = f"{station_display_name} - {METEOROLOGY_MAPPING.get(field, field)} Data Availability"
+            
+            fig.update_layout(
+                title=title,
+                xaxis_title="Month",
+                yaxis_title="Hourly Data Count",
+                xaxis=dict(
+                    range=['2000-01-01', '2025-12-31'],
+                    type='date'
+                ),
                 margin=dict(l=50, r=20, t=50, b=50)
             )
         

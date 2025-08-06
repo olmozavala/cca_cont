@@ -2,12 +2,13 @@ import netrc
 from typing import Tuple, Optional
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
+import pandas as pd
 
 DB_MACHINE = 'DB-OZ'
 # DB_MACHINE = 'DB-SOLOREAD'
 # DB_MACHINE = 'OWGIS-OPERATIVO'
 DB_NAME = 'contingencia'
-DB_HOST = 'amate.atmosfera.unam.mx'
+DB_HOST = 'localhost'  # Changed from 'amate.atmosfera.unam.mx' to 'localhost'
 
 # Pollutant mapping based on the provided table names
 POLLUTANT_MAPPING = {
@@ -61,6 +62,57 @@ def get_db_engine() -> Optional[Engine]:
     except Exception as e:
         print(f"Database connection error: {e}")
         return None
+
+def clean_data_value(value: object) -> str:
+    """
+    Clean data values by removing special characters and converting to string.
+    
+    Args:
+        value (object): Raw value from the data
+        
+    Returns:
+        str: Cleaned string value
+    """
+    if pd.isna(value) or value == 'nr':
+        return 'nr'
+    
+    # Convert to string and clean special characters
+    value_str = str(value)
+    
+    # Remove common problematic characters that might appear in PM data
+    # Replace μ (micro) with 'u' or remove it
+    value_str = value_str.replace('μ', 'u')
+    
+    # Remove any other non-numeric characters except decimal points and minus signs
+    import re
+    # Keep only numbers, decimal points, minus signs, and 'nr'
+    if value_str.lower() == 'nr':
+        return 'nr'
+    
+    # Try to extract numeric value
+    numeric_match = re.search(r'-?\d*\.?\d*', value_str)
+    if numeric_match:
+        return numeric_match.group()
+    
+    return value_str
+
+
+
+def num_string(num: int) -> str:
+    """
+    Convert a number to a zero-padded string.
+    
+    Args:
+        num (int): Number to convert
+        
+    Returns:
+        str: Zero-padded string representation
+    """
+    if num < 10:
+        return "0" + str(num)
+    else:
+        return str(num)
+
 
 
 def test_connection() -> bool:

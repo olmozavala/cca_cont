@@ -120,3 +120,91 @@ def get_meteorology_data(station_id: str, meteorology_field: str, start_date: da
     except Exception as e:
         print(f"Error fetching meteorology data: {e}")
         return pd.DataFrame() 
+
+
+def get_pollutant_availability_data(station_id: str, pollutant: str):
+    """Fetch monthly data availability counts for a pollutant."""
+    engine = get_db_engine()
+    if engine is None:
+        return pd.DataFrame()
+    
+    try:
+        table_name = f"cont_{pollutant}"
+        
+        if station_id == 'all_stations':
+            # Query for all stations aggregated
+            query = f"""
+            SELECT 
+                DATE_TRUNC('month', fecha) as month,
+                COUNT(*) as count
+            FROM {table_name} 
+            WHERE fecha >= '2000-01-01' 
+            AND fecha <= '2025-12-31'
+            GROUP BY DATE_TRUNC('month', fecha)
+            ORDER BY month
+            """
+            params = {}
+        else:
+            # Query for specific station
+            query = f"""
+            SELECT 
+                DATE_TRUNC('month', fecha) as month,
+                COUNT(*) as count
+            FROM {table_name} 
+            WHERE id_est = %(station_id)s 
+            AND fecha >= '2000-01-01' 
+            AND fecha <= '2025-12-31'
+            GROUP BY DATE_TRUNC('month', fecha)
+            ORDER BY month
+            """
+            params = {'station_id': station_id}
+        
+        df = pd.read_sql(query, engine, params=params)
+        return df
+    except Exception as e:
+        print(f"Error fetching pollutant availability data: {e}")
+        return pd.DataFrame()
+
+
+def get_meteorology_availability_data(station_id: str, meteorology_field: str):
+    """Fetch monthly data availability counts for a meteorology field."""
+    engine = get_db_engine()
+    if engine is None:
+        return pd.DataFrame()
+    
+    try:
+        table_name = f"met_{meteorology_field}"
+        
+        if station_id == 'all_stations':
+            # Query for all stations aggregated
+            query = f"""
+            SELECT 
+                DATE_TRUNC('month', fecha) as month,
+                COUNT(*) as count
+            FROM {table_name} 
+            WHERE fecha >= '2000-01-01' 
+            AND fecha <= '2025-12-31'
+            GROUP BY DATE_TRUNC('month', fecha)
+            ORDER BY month
+            """
+            params = {}
+        else:
+            # Query for specific station
+            query = f"""
+            SELECT 
+                DATE_TRUNC('month', fecha) as month,
+                COUNT(*) as count
+            FROM {table_name} 
+            WHERE id_est = %(station_id)s 
+            AND fecha >= '2000-01-01' 
+            AND fecha <= '2025-12-31'
+            GROUP BY DATE_TRUNC('month', fecha)
+            ORDER BY month
+            """
+            params = {'station_id': station_id}
+        
+        df = pd.read_sql(query, engine, params=params)
+        return df
+    except Exception as e:
+        print(f"Error fetching meteorology availability data: {e}")
+        return pd.DataFrame() 

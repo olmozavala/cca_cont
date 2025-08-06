@@ -222,6 +222,7 @@
 | id_est | character |
 | id | integer |
 | id_tipo_pronostico | integer |
+| id_hora_pronostico |
 | hour_p01 | real |
 | hour_p02 | real |
 | hour_p03 | real |
