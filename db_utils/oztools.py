@@ -64,8 +64,9 @@ class ContIOTools:
         Returns:
             List[str]: List of pollutant table names
         """
-        return ['cont_pmco', 'cont_pmdoscinco', 'cont_nox', 'cont_codos', 'cont_co', 
-                'cont_nodos', 'cont_no', 'cont_otres', 'cont_sodos', 'cont_pmdiez']
+        # return ['cont_pmco', 'cont_pmdoscinco', 'cont_nox', 'cont_codos', 'cont_co', 
+                # 'cont_nodos', 'cont_no', 'cont_otres', 'cont_sodos', 'cont_pmdiez']
+        return ['cont_otres']
 
     def getContaminants(self) -> List[str]:
         """
@@ -95,7 +96,9 @@ class ContIOTools:
         Returns:
             str: Corresponding table name
         """
-        if "PM2.5" in fileName:
+        fileName = fileName.upper()
+        
+        if "PM2" in fileName:
             return "cont_pmdoscinco"
 
         if "PM10" in fileName:

@@ -1,15 +1,15 @@
 import pandas as pd
 
-def read_html(cont: str, year: int, month: int) -> pd.DataFrame:
+def read_html(table: str, year: int, month: int) -> pd.DataFrame:
     """
     Read HTML data from the CDMX air quality API.
     
     Args:
-        cont (str): Parameter code
+        table (str): Table name
         year (int): Year
         month (int): Month
     """
-    url = f"http://www.aire.cdmx.gob.mx/estadisticas-consultas/concentraciones/respuesta.php?qtipo=HORARIOS&parametro={cont}&anio={year}&qmes={month}"
+    url = f"http://www.aire.cdmx.gob.mx/estadisticas-consultas/concentraciones/respuesta.php?qtipo=HORARIOS&parametro={table}&anio={year}&qmes={month}"
     print(f"Reading data from: {url}")
 
     # Try multiple encodings to handle character encoding issues
@@ -23,10 +23,10 @@ def read_html(cont: str, year: int, month: int) -> pd.DataFrame:
             else:
                 all_read = pd.read_html(url, header=1)
             data = all_read[0]
-            print(f"✅ Successfully read data with encoding: {encoding or 'default'}")
+            print(f"✅ Successfully read data with encoding: {encoding or 'default'} for table {table}")
             break
         except Exception as e:
-            print(f"⚠️  Failed with encoding {encoding or 'default'}: {str(e)[:100]}...")
+            print(f"⚠️  Failed to load html with encoding {encoding or 'default'}: {str(e)[:100]}...")
             continue
 
     return data, url

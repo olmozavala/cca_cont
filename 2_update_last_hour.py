@@ -7,11 +7,12 @@ This script fetches data from the Mexico City air quality API and inserts it int
 import sys
 import pandas as pd
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List
 import logging
 import warnings
 import argparse
+from db_utils.proj_utils import parse_date_string, validate_hour, validate_hours_to_read
 
 # Add the db_utils directory to the path
 sys.path.insert(0, './db_utils')
@@ -34,77 +35,10 @@ logger = logging.getLogger(__name__)
 # Suppress BeautifulSoup encoding warnings
 warnings.filterwarnings("ignore", message="You provided Unicode markup but also provided a value for from_encoding")
 
-
-def parse_date_string(date_str: str) -> tuple[int, int, int]:
-    """
-    Parse date string in format YYYY-MM-DD or DD-MM-YYYY.
-    
-    Args:
-        date_str (str): Date string to parse
-        
-    Returns:
-        tuple[int, int, int]: (year, month, day)
-        
-    Raises:
-        ValueError: If date format is invalid
-    """
-    try:
-        # Try YYYY-MM-DD format first
-        if len(date_str.split('-')[0]) == 4:
-            year, month, day = map(int, date_str.split('-'))
-        else:
-            # Assume DD-MM-YYYY format
-            day, month, year = map(int, date_str.split('-'))
-        
-        # Validate date components
-        if not (1 <= month <= 12 and 1 <= day <= 31 and year > 1900):
-            raise ValueError("Invalid date components")
-            
-        return year, month, day
-    except Exception as e:
-        raise ValueError(f"Invalid date format: {date_str}. Expected YYYY-MM-DD or DD-MM-YYYY. Error: {e}")
-
-
-def validate_hour(hour: int) -> int:
-    """
-    Validate and return hour value.
-    
-    Args:
-        hour (int): Hour value to validate
-        
-    Returns:
-        int: Validated hour value
-        
-    Raises:
-        ValueError: If hour is not between 0 and 23
-    """
-    if not (0 <= hour <= 23):
-        raise ValueError(f"Hour must be between 0 and 23, got: {hour}")
-    return hour
-
-
-def validate_hours_to_read(hours: int) -> int:
-    """
-    Validate and return number of hours to read.
-    
-    Args:
-        hours (int): Number of hours to validate
-        
-    Returns:
-        int: Validated number of hours
-        
-    Raises:
-        ValueError: If hours is not positive
-    """
-    if hours <= 0:
-        raise ValueError(f"Number of hours to read must be positive, got: {hours}")
-    return hours
-
-
 def update_tables(oz_tools: ContIOTools, tables: List[str], parameters: List[str], 
                   month: int, year: int, day: int, hour: int, read_last_hours: int = 10) -> None:
     """
-    Update tables with data from the last few hours.
+    Update tables with data from the last few hours, handling multi-month date ranges.
     
     Args:
         oz_tools (ContIOTools): Helper object for table and parameter mappings
@@ -116,67 +50,158 @@ def update_tables(oz_tools: ContIOTools, tables: List[str], parameters: List[str
         hour (int): Current hour
         read_last_hours (int): Number of hours to read from the past
     """
-    # For each table load the info of current month
+    # Define the first and last date (including hours) that will be inserted into the DB
+    end_datetime = datetime(year, month, day, hour)
+    start_datetime = end_datetime - timedelta(hours=read_last_hours)
+    
+    logger.info(f"Date range to process: {start_datetime} to {end_datetime}")
+    
+    # Check if we are covering more than one month or year
+    months_to_process = []
+    current_date = start_datetime
+    
+    while current_date <= end_datetime:
+        month_key = (current_date.year, current_date.month)
+        if month_key not in months_to_process:
+            months_to_process.append(month_key)
+        current_date += timedelta(hours=1)
+    
+    # Determine if we're crossing year boundaries
+    years_in_range = set(year for year, month in months_to_process)
+    if len(years_in_range) > 1:
+        logger.info(f"Crossing year boundary: processing {len(years_in_range)} year(s): {sorted(years_in_range)}")
+    
+    # Determine if we're crossing month boundaries
+    if len(months_to_process) > 1:
+        logger.info(f"Crossing month boundary: processing {len(months_to_process)} month(s): {months_to_process}")
+    else:
+        logger.info(f"Processing single month: {months_to_process[0]}")
+    
+    # For each table and parameter
     for idx, table in enumerate(tables):
         cont = parameters[idx]
-
-        data, url = read_html(cont, year, month)
-
-        if data is None:
-            logger.error(f"Error reading data from {url}: All encoding attempts failed")
-            continue
-
-        stations = data.keys()
-
-        # From which hour we will try to insert data
-        from_hour = (hour - read_last_hours) % 24
-
-        # Today and yesterday dates as strings
-        yesterday_str = f"{num_string(day-1)}-{num_string(month)}-{year}"
-        today_str = f"{num_string(day)}-{num_string(month)}-{year}"
-        logger.info(f"Yesterday str: {yesterday_str}   Today str: {today_str} From hour: {from_hour}")
-
-        # In this case we need to read hours from the previous day
-        if hour <= from_hour:
-            # Read all from today and only hours above from_hour from yesterday
-            data_index = np.logical_or(data['Fecha'] == today_str,
-                                      np.logical_and(data['Fecha'] == yesterday_str, data['Hora'] >= from_hour))
-        else:
-            # Read hours above from_hour from today
-            data_index = np.logical_and(data['Fecha'] == today_str, data['Hora'] >= from_hour)
+        logger.info(f"Processing table: {table} with parameter: {cont}")
+        
+        total_success_count = 0
+        total_total_count = 0
+        total_duplicate_count = 0
+        
+        # Process each month separately
+        for year_to_process, month_to_process in months_to_process:
+            logger.info(f"Reading data for {month_to_process}/{year_to_process}")
             
-        # Reduce the size of the original data using the previously calculated index
-        today_data = data[data_index]
-        today_data = today_data.reset_index(drop=True)
-        
-        logger.info(f"Inserting into DB table {table} .....")
-        success_count = 0
-        total_count = 0
-        
-        for row_id in range(len(today_data)):
-            row = today_data.iloc[row_id]
-            # Use .iloc[] to avoid deprecation warnings
-            fecha_split = row.iloc[0].split('-')
-
-            # We need to substract 1 since hours in the database are 0-23   
-            hour = row.iloc[1] - 1
-            # Convert date format: DD-MM-YYYY to MM/DD/YYYY HH24:MI:SS
-            fecha = f"{fecha_split[1]}/{fecha_split[0]}/{fecha_split[2]} {str(hour)}:00:00"
+            # Read HTML data for this month
+            data, url = read_html(cont, year_to_process, month_to_process)
             
-            for col_id in range(2, len(row)):
-                value = row.iloc[col_id]
-                value_clean = clean_data_value(value)
-                if value_clean != 'nr':
-                    total_count += 1
-                    # Convert numpy types to native Python types for meteorology tables
-                    if isinstance(value, (np.integer, np.floating)):
-                        value_native = value.item()
-                    else:
-                        value_native = value_clean
-                    if insert_data(table, fecha, str(stations[col_id]), str(value_native)):
-                        success_count += 1
+            if data is None:
+                logger.error(f"Error reading data from {url}: All encoding attempts failed")
+                continue
+            
+            stations = data.keys()
+            
+            # Filter data for the specific date range within this month
+            filtered_data = filter_data_for_date_range(data, start_datetime, end_datetime)
+            
+            if filtered_data.empty:
+                logger.info(f"No data found for {table} in {month_to_process}/{year_to_process}")
+                continue
+            
+            logger.info(f"Found {len(filtered_data)} records for {table} in year {year_to_process} and month {month_to_process} for the date range {start_datetime} to {end_datetime}")
+            
+            # Insert the filtered data
+            success_count, total_count, duplicate_count = insert_filtered_data(table, filtered_data, stations)
+            total_success_count += success_count
+            total_total_count += total_count
+            total_duplicate_count += duplicate_count
+
+        logger.info(f"Done! Inserted {total_success_count}/{total_total_count} records into {table} with {total_duplicate_count} duplicates")
+
+
+def filter_data_for_date_range(data: pd.DataFrame, start_datetime: datetime, end_datetime: datetime) -> pd.DataFrame:
+    """
+    Filter data for a specific date range.
+    
+    Args:
+        data (pd.DataFrame): Raw data from HTML
+        start_datetime (datetime): Start datetime (inclusive)
+        end_datetime (datetime): End datetime (inclusive)
         
-        logger.info(f"Done! Inserted {success_count}/{total_count} records into {table}")
+    Returns:
+        pd.DataFrame: Filtered data for the specified date range
+    """
+    filtered_rows = []
+    
+    for _, row in data.iterrows():
+        # Parse the date and hour from the data
+        fecha_str = row.iloc[0]  # Format: DD-MM-YYYY
+        hora = row.iloc[1]  # Hour (1-24 format)
+        
+        # Convert to datetime
+        fecha_parts = fecha_str.split('-')
+        day = int(fecha_parts[0])
+        month = int(fecha_parts[1])
+        year = int(fecha_parts[2])
+        
+        # Convert hour from 1-24 to 0-23 format
+        hour = hora - 1
+        
+        row_datetime = datetime(year, month, day, hour)
+        
+        # Check if this row is within our date range
+        if start_datetime <= row_datetime <= end_datetime:
+            filtered_rows.append(row)
+    
+    if filtered_rows:
+        return pd.DataFrame(filtered_rows).reset_index(drop=True)
+    else:
+        return pd.DataFrame()
+
+
+def insert_filtered_data(table: str, filtered_data: pd.DataFrame, stations: pd.Index) -> tuple[int, int]:
+    """
+    Insert filtered data into the database.
+    
+    Args:
+        table (str): Table name to insert into
+        filtered_data (pd.DataFrame): Data to insert
+        stations (pd.Index): Station names
+        
+    Returns:
+        tuple[int, int]: (success_count, total_count)
+    """
+    success_count = 0
+    total_count = 0
+    duplicate_count = 0
+    
+    for row_id in range(len(filtered_data)):
+        row = filtered_data.iloc[row_id]
+        
+        # Parse date and hour
+        fecha_split = row.iloc[0].split('-')  # DD-MM-YYYY
+        hour = row.iloc[1] - 1  # Convert from 1-24 to 0-23 format
+        
+        # Convert date format: DD-MM-YYYY to MM/DD/YYYY HH24:MI:SS
+        fecha = f"{fecha_split[1]}/{fecha_split[0]}/{fecha_split[2]} {str(hour)}:00:00"
+        
+        for col_id in range(2, len(row)):
+            value = row.iloc[col_id]
+            value_clean = clean_data_value(value)
+            
+            if value_clean != 'nr':
+                total_count += 1
+                # Convert numpy types to native Python types for meteorology tables
+                if isinstance(value, (np.integer, np.floating)):
+                    value_native = value.item()
+                else:
+                    value_native = value_clean
+                    
+                output = insert_data(table, fecha, str(stations[col_id]), str(value_native))
+                if output == 'duplicate':
+                    duplicate_count += 1
+                else:
+                    success_count += 1
+    
+    return success_count, total_count, duplicate_count
 
 
 def parse_arguments() -> argparse.Namespace:

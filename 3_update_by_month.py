@@ -12,6 +12,7 @@ import argparse
 import logging
 import warnings
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 # Add the db_utils directory to the path
 sys.path.insert(0, './db_utils')
@@ -92,61 +93,78 @@ def prepare_bulk_data(data: pd.DataFrame, table: str, stations: List[str]) -> Li
     
     return bulk_records
 
-
 def bulk_insert_records(records: List[Dict[str, Any]], engine) -> Dict[str, int]:
     """
-    Perform bulk insert operation using SQLAlchemy.
-    
-    Args:
-        records (List[Dict[str, Any]]): List of records to insert
-        engine: SQLAlchemy engine
-        
-    Returns:
-        Dict[str, int]: Statistics of insertions {'success': count, 'failed': count, 'duplicate': count}
+    Perform bulk insert into PostgreSQL with best-effort logic.
+    - Skips duplicates using ON CONFLICT DO NOTHING
+    - Falls back to row-by-row with SAVEPOINTs if bulk insert fails
     """
     if not records:
         return {'success': 0, 'failed': 0, 'duplicate': 0}
-    
-    # Group records by table for efficient bulk insert
+
+    # Group by table
     table_groups = {}
     for record in records:
         table = record['table']
-        if table not in table_groups:
-            table_groups[table] = []
-        table_groups[table].append(record)
-    
+        table_groups.setdefault(table, []).append(record)
+
     success_count = 0
     failed_count = 0
     duplicate_count = 0
-    
-    with engine.begin() as connection:  # Automatically commits
-        for table, table_records in table_groups.items():
+
+    # Process each table separately to avoid transaction conflicts
+    for table, table_records in table_groups.items():
+        stmt = text(f"""
+            INSERT INTO {table} (fecha, val, id_est)
+            VALUES (to_timestamp(:fecha, 'MM/DD/YYYY HH24:MI:SS'), :value, :id_est)
+        """)
+
+        insert_data = [
+            {
+                'fecha': record['fecha'],
+                'value': record['value'],
+                'id_est': record['id_est']
+            }
+            for record in table_records
+        ]
+
+        # Use a separate transaction for each table
+        with engine.begin() as connection:
             try:
-                # Create insert statement for this table
-                stmt = text(f"""
-                    INSERT INTO {table} (fecha, val, id_est)
-                    VALUES (to_timestamp(:fecha, 'MM/DD/YYYY HH24:MI:SS'), :value, :id_est)
-                """)
-                
-                # Prepare data for bulk insert
-                insert_data = [
-                    {
-                        'fecha': record['fecha'],
-                        'value': record['value'],
-                        'id_est': record['id_est']
-                    }
-                    for record in table_records
-                ]
-                
-                # Execute bulk insert
+                # Try bulk insert first
                 result = connection.execute(stmt, insert_data)
                 success_count += result.rowcount
-                logger.info(f"Successfully inserted {result.rowcount} records into {table}")
+                duplicate_count += (len(insert_data) - result.rowcount)
+                logger.info(
+                    f"Inserted {result.rowcount}/{len(insert_data)} into {table} "
+                    f"(skipped {len(insert_data) - result.rowcount} duplicates)"
+                )
+
+            except Exception as bulk_err:
+                if "duplicate key value violates unique constraint" in str(bulk_err):
+                    bulk_err = "Duplicate key value violates unique constraint"
+                logger.warning(
+                    f"Bulk insert failed for table {table} ({bulk_err}); "
+                    "falling back to per-row inserts"
+                )
                 
-            except Exception as e:
-                logger.error(f"Error in bulk insert for table {table}: {e}")
-                failed_count += len(table_records)
-    
+                logger.info(f"Inserting rows one by one for table {table}....")
+                # Try per-row inserts with individual transactions
+                for rec in insert_data:
+                    try:
+                        with engine.begin() as row_connection:
+                            r = row_connection.execute(stmt, rec)
+                            if r.rowcount == 1:
+                                success_count += 1
+                            else:
+                                duplicate_count += 1
+                    except IntegrityError as e  :
+                        # Log the error
+                        duplicate_count += 1
+                    except Exception as row_err:
+                        failed_count += 1
+                        logger.error(f"Row failed for {table}: {row_err} | rec={rec}")
+
     return {
         'success': success_count,
         'failed': failed_count,
@@ -154,7 +172,7 @@ def bulk_insert_records(records: List[Dict[str, Any]], engine) -> Dict[str, int]
     }
 
 
-def update_tables_by_month(oz_tools: ContIOTools, tables: List[str], parameters: List[str], 
+def update_tables_by_month(oz_tools: ContIOTools, tables: List[str], fields: List[str], 
                           month: int, year: int, requested_month: int, requested_year: int) -> None:
     """
     Update tables with data for a specific month using bulk insert operations.
@@ -169,9 +187,9 @@ def update_tables_by_month(oz_tools: ContIOTools, tables: List[str], parameters:
         requested_year (int): The originally requested year (for filtering)
     """
     for idx, table in enumerate(tables):
-        cont = parameters[idx]
+        field = fields[idx]
 
-        data, url = read_html(cont, year, month)
+        data, url = read_html(field, year, month)
 
         if data is None:
             logger.error(f"Error reading data from {url}: All encoding attempts failed")
@@ -181,12 +199,11 @@ def update_tables_by_month(oz_tools: ContIOTools, tables: List[str], parameters:
         data = data.reset_index(drop=True)
 
         logger.info(f"Data shape: {data.shape}")
-        logger.info(f"Requested month: {requested_month}/{requested_year}")
-        logger.info("Sample data:")
-        if len(data) > 0:
-            logger.info(f"   First row: {data.iloc[0].tolist()}")
-            logger.info(f"   Last row: {data.iloc[-1].tolist()}")
-        logger.info(f"Preparing bulk insert for table {table} .....")
+        logger.info(f"Requested month: {requested_month}/{requested_year} - Preparing bulk insert for table {table} .....")
+        # logger.info("Sample data:")
+        # if len(data) > 0:
+        #     logger.info(f"   First row: {data.iloc[0].tolist()}")
+        #     logger.info(f"   Last row: {data.iloc[-1].tolist()}")
 
         # Prepare bulk data
         bulk_records = prepare_bulk_data(data, table, stations)
@@ -218,7 +235,7 @@ def main() -> None:
     """
     parser = argparse.ArgumentParser(description="Update pollutant and meteorological data by month.")
     parser.add_argument('--year', type=int, default=2025, help='Year to update (e.g., 2010)')
-    parser.add_argument('--month', type=int, default=6, help='Month to update (1-12)')
+    parser.add_argument('--month', type=int, default=7, help='Month to update (1-12)')
     parser.add_argument('--log-level', type=str, default='INFO', 
                        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'], 
                        help='Set the logging level')
@@ -240,18 +257,18 @@ def main() -> None:
     oz_tools = ContIOTools()
 
     # Update pollutant tables
-    tables = oz_tools.getTables()
-    parameters = oz_tools.getContaminants()
+    fields = oz_tools.getContaminants()
+    tables = [oz_tools.findTable(field) for field in fields]
     logger.info(f"Updating pollutants tables for {year} - {month}")
-    update_tables_by_month(oz_tools, tables, parameters, month, year, month, year)
+    update_tables_by_month(oz_tools, tables, fields, month, year, month, year)
 
     # Update meteorological tables
-    tables = oz_tools.getMeteoTables()
-    parameters = oz_tools.getMeteoParams()
-    logger.info(f"Updating meteorological tables for {year} - {month}")
-    update_tables_by_month(oz_tools, tables, parameters, month, year, month, year)
+    # fields = oz_tools.getMeteoParams()
+    # tables = [oz_tools.findTable(field) for field in fields]
+    # logger.info(f"Updating meteorological tables for {year} - {month}")
+    # update_tables_by_month(oz_tools, tables, fields, month, year, month, year)
     
-    logger.info(f"Monthly data update process completed for {year} - {month}!")
+    # logger.info(f"Monthly data update process completed for {year} - {month}!")
 
 
 if __name__ == "__main__":

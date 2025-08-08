@@ -28,6 +28,191 @@ def get_all_tables() -> List[str]:
     return pollutant_tables + meteo_tables
 
 
+def get_forecast_tables() -> List[str]:
+    """
+    Get all forecast table names that start with 'forecast'.
+    
+    Returns:
+        List[str]: List of forecast table names
+    """
+    oz_tools = ContIOTools()
+    all_tables = oz_tools.getTables() + oz_tools.getMeteoTables()
+    forecast_tables = [table for table in all_tables if table.startswith('forecast')]
+    return forecast_tables
+
+
+def check_forecast_fk_constraint(engine, table_name: str) -> Tuple[bool, str]:
+    """
+    Check if a forecast table has the id_tipo_pronostico foreign key constraint.
+    
+    Args:
+        engine: SQLAlchemy engine
+        table_name (str): Name of the forecast table to check
+        
+    Returns:
+        Tuple[bool, str]: (has_fk, description)
+    """
+    try:
+        with engine.connect() as connection:
+            # Check if the table exists
+            check_table_sql = text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_name = :table_name
+                )
+            """)
+            result = connection.execute(check_table_sql, {'table_name': table_name})
+            table_exists = result.fetchone()[0]
+            
+            if not table_exists:
+                return False, f"Table {table_name} does not exist"
+            
+            # Check if id_tipo_pronostico column exists
+            check_column_sql = text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.columns 
+                    WHERE table_name = :table_name AND column_name = 'id_tipo_pronostico'
+                )
+            """)
+            result = connection.execute(check_column_sql, {'table_name': table_name})
+            column_exists = result.fetchone()[0]
+            
+            if not column_exists:
+                return False, f"Column 'id_tipo_pronostico' not found in table {table_name}"
+            
+            # Check foreign key constraint to tipo_pronostico
+            fk_sql = text(f"""
+                SELECT COUNT(*) 
+                FROM pg_constraint 
+                WHERE conrelid = '{table_name}'::regclass
+                AND contype = 'f'
+                AND pg_get_constraintdef(oid) LIKE '%REFERENCES tipo_pronostico%'
+            """)
+            result = connection.execute(fk_sql)
+            has_fk = result.fetchone()[0] > 0
+            
+            if has_fk:
+                return True, f"Table {table_name} has id_tipo_pronostico foreign key to tipo_pronostico"
+            else:
+                return False, f"Table {table_name} missing id_tipo_pronostico foreign key to tipo_pronostico"
+                
+    except Exception as e:
+        return False, f"Error checking forecast FK constraint for {table_name}: {e}"
+
+
+def fix_forecast_fk_constraint(engine, table_name: str) -> Tuple[bool, str]:
+    """
+    Fix a forecast table's id_tipo_pronostico foreign key constraint.
+    
+    Args:
+        engine: SQLAlchemy engine
+        table_name (str): Name of the forecast table to fix
+        
+    Returns:
+        Tuple[bool, str]: (success, description)
+    """
+    try:
+        with engine.connect() as connection:
+            # Check if the table exists
+            check_table_sql = text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_name = :table_name
+                )
+            """)
+            result = connection.execute(check_table_sql, {'table_name': table_name})
+            table_exists = result.fetchone()[0]
+            
+            if not table_exists:
+                return False, f"Table {table_name} does not exist"
+            
+            # Check if id_tipo_pronostico column exists
+            check_column_sql = text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.columns 
+                    WHERE table_name = :table_name AND column_name = 'id_tipo_pronostico'
+                )
+            """)
+            result = connection.execute(check_column_sql, {'table_name': table_name})
+            column_exists = result.fetchone()[0]
+            
+            if not column_exists:
+                return False, f"Column 'id_tipo_pronostico' not found in table {table_name}"
+            
+            # Check if tipo_pronostico table exists
+            check_tipo_table_sql = text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_name = 'tipo_pronostico'
+                )
+            """)
+            result = connection.execute(check_tipo_table_sql)
+            tipo_table_exists = result.fetchone()[0]
+            
+            if not tipo_table_exists:
+                return False, f"Table 'tipo_pronostico' does not exist"
+            
+            # Check current foreign key constraint
+            has_fk, description = check_forecast_fk_constraint(engine, table_name)
+            if has_fk:
+                return True, f"Table {table_name} already has id_tipo_pronostico foreign key"
+            
+            # Check for orphaned records before adding foreign key
+            orphan_check_sql = text(f"""
+                SELECT DISTINCT t.id_tipo_pronostico, COUNT(*) as count
+                FROM {table_name} t
+                LEFT JOIN tipo_pronostico tp ON t.id_tipo_pronostico = tp.id
+                WHERE tp.id IS NULL AND t.id_tipo_pronostico IS NOT NULL
+                GROUP BY t.id_tipo_pronostico
+                ORDER BY count DESC
+            """)
+            
+            orphan_result = connection.execute(orphan_check_sql)
+            orphaned_types = orphan_result.fetchall()
+            
+            if orphaned_types:
+                print(f"  ⚠️  Found orphaned id_tipo_pronostico values in {table_name}: {[t[0] for t in orphaned_types]}")
+                print(f"  📊 Orphaned record counts: {dict(orphaned_types)}")
+                
+                # Ask user what to do
+                response = input(f"  Delete orphaned records from {table_name}? (y/N): ")
+                if response.lower() == 'y':
+                    delete_orphaned_sql = text(f"""
+                        DELETE FROM {table_name} 
+                        WHERE id_tipo_pronostico IN (
+                            SELECT DISTINCT t.id_tipo_pronostico
+                            FROM {table_name} t
+                            LEFT JOIN tipo_pronostico tp ON t.id_tipo_pronostico = tp.id
+                            WHERE tp.id IS NULL AND t.id_tipo_pronostico IS NOT NULL
+                        )
+                    """)
+                    result = connection.execute(delete_orphaned_sql)
+                    deleted_count = result.rowcount
+                    print(f"  ✅ Deleted {deleted_count} orphaned records from {table_name}")
+                    connection.commit()
+                else:
+                    print(f"  ⚠️  Skipping foreign key constraint for {table_name} due to orphaned records")
+                    return False, f"Skipped {table_name} due to orphaned records"
+            
+            # Add foreign key constraint
+            try:
+                fk_sql = text(f"""
+                    ALTER TABLE {table_name} 
+                    ADD CONSTRAINT fk_{table_name}_tipo_pronostico 
+                    FOREIGN KEY (id_tipo_pronostico) REFERENCES tipo_pronostico(id) ON DELETE CASCADE
+                """)
+                connection.execute(fk_sql)
+                connection.commit()
+                return True, f"Successfully added id_tipo_pronostico foreign key to {table_name}"
+                
+            except Exception as e:
+                connection.rollback()
+                return False, f"Failed to add id_tipo_pronostico foreign key to {table_name}: {e}"
+                    
+    except Exception as e:
+        return False, f"Error fixing forecast FK constraint for {table_name}: {e}"
+
+
 def check_table_schema(engine, table_name: str) -> Tuple[bool, str]:
     """
     Check if a table's id column is properly configured as auto-increment.
@@ -123,7 +308,9 @@ def check_table_constraints(engine, table_name: str) -> Tuple[bool, bool, bool, 
             has_composite_pk = False
             if pk_row:
                 pk_definition = pk_row[0]
-                has_composite_pk = 'id, fecha, id_est' in pk_definition.replace(' ', '')
+                # Check for the correct composite primary key pattern
+                # The actual format is "PRIMARY KEY (id, fecha, id_est)"
+                has_composite_pk = '(id, fecha, id_est)' in pk_definition
             
             # Check unique constraint on (fecha, id_est)
             unique_sql = text(f"""
@@ -420,9 +607,16 @@ def main() -> None:
     for table in tables:
         print(f"  - {table}")
     
+    # Get forecast tables
+    forecast_tables = get_forecast_tables()
+    print(f"\n📋 Found {len(forecast_tables)} forecast tables to check/fix:")
+    for table in forecast_tables:
+        print(f"  - {table}")
+    
     print("\n🔍 Checking current table configurations...")
     tables_to_fix_id = []
     tables_to_fix_constraints = []
+    forecast_tables_to_fix_fk = []
     
     for table in tables:
         # Check ID column configuration
@@ -437,7 +631,14 @@ def main() -> None:
         if not (has_fk and has_composite_pk and has_unique):
             tables_to_fix_constraints.append(table)
     
-    if not tables_to_fix_id and not tables_to_fix_constraints:
+    # Check forecast tables for id_tipo_pronostico foreign key
+    for table in forecast_tables:
+        has_fk, fk_description = check_forecast_fk_constraint(engine, table)
+        print(f"  {table} Forecast FK: {fk_description}")
+        if not has_fk:
+            forecast_tables_to_fix_fk.append(table)
+    
+    if not tables_to_fix_id and not tables_to_fix_constraints and not forecast_tables_to_fix_fk:
         print("\n✅ All tables are already properly configured!")
         return
     
@@ -450,6 +651,11 @@ def main() -> None:
     if tables_to_fix_constraints:
         print(f"\n🔧 Found {len(tables_to_fix_constraints)} tables that need constraint fixing:")
         for table in tables_to_fix_constraints:
+            print(f"  - {table}")
+    
+    if forecast_tables_to_fix_fk:
+        print(f"\n🔧 Found {len(forecast_tables_to_fix_fk)} forecast tables that need id_tipo_pronostico foreign key fixing:")
+        for table in forecast_tables_to_fix_fk:
             print(f"  - {table}")
     
     # Ask for confirmation
@@ -493,6 +699,25 @@ def main() -> None:
                 failed_count += 1
         
         print(f"📊 Constraint Fix Summary:")
+        print(f"  ✅ Successfully fixed: {success_count}")
+        print(f"  ❌ Failed to fix: {failed_count}")
+    
+    # Fix forecast foreign keys
+    if forecast_tables_to_fix_fk:
+        print("\n🔧 Fixing forecast foreign keys...")
+        success_count = 0
+        failed_count = 0
+        
+        for table in forecast_tables_to_fix_fk:
+            success, description = fix_forecast_fk_constraint(engine, table)
+            if success:
+                print(f"  ✅ {description}")
+                success_count += 1
+            else:
+                print(f"  ❌ {description}")
+                failed_count += 1
+        
+        print(f"📊 Forecast FK Fix Summary:")
         print(f"  ✅ Successfully fixed: {success_count}")
         print(f"  ❌ Failed to fix: {failed_count}")
     

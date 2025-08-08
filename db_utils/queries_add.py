@@ -76,7 +76,7 @@ def insert_data(table: str, fecha: str, id_est: str, value: str, connection: Opt
             except Exception as rb_e:
                 logging.error(f"Rollback failed: {rb_e}")
         if "duplicate key" in str(e).lower() or "already exists" in str(e).lower():
-            logging.info(f"Row already existed in {table} for {fecha} {id_est}")
+            # logging.info(f"Row already existed in {table} for {fecha} {id_est}")
             return 'duplicate'
         else:
             logging.error(f"Error inserting data into {table}: {e}")

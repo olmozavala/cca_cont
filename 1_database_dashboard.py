@@ -13,6 +13,8 @@ app = dash.Dash(__name__)
 from db_utils.sql_con import POLLUTANT_MAPPING, METEOROLOGY_MAPPING
 from db_utils.queries_select import get_stations_data, get_station_name, get_pollutant_data, get_meteorology_data, get_pollutant_availability_data, get_meteorology_availability_data
 
+default_station = 'ACO'
+
 # Dashboard configuration
 DASHBOARD_CONFIG = {
     'host': '0.0.0.0',
@@ -25,7 +27,7 @@ def get_stations_list():
     """Get list of stations for dropdown."""
     df = get_stations_data()
     if df.empty:
-        return [{'label': 'MER', 'value': 'MER'}]
+        return [{'label': default_station, 'value': default_station}]
     
     station_options = [{'label': f"{row['nombre']} ({row['id']})", 'value': row['id']} for _, row in df.iterrows()]
     station_options.append({'label': 'All stations', 'value': 'all_stations'})
@@ -33,6 +35,9 @@ def get_stations_list():
 
 # App layout
 app.layout = html.Div([
+    # Store component to trigger initial callback
+    dcc.Store(id='initial-trigger', data=True),
+    
     html.H1("Air Quality Data Analysis Dashboard", 
              style={'textAlign': 'center', 'marginBottom': 30}),
     
@@ -47,7 +52,7 @@ app.layout = html.Div([
                         dcc.Dropdown(
                             id='station-dropdown',
                             options=get_stations_list(),
-                            value='MER',
+                            value=default_station,
                             style={'width': '250px'}
                         )
                     ], style={'display': 'inline-block', 'marginRight': '20px'}),
@@ -132,7 +137,7 @@ app.layout = html.Div([
                         dcc.Dropdown(
                             id='met-station-dropdown',
                             options=get_stations_list(),
-                            value='MER',
+                            value=default_station,
                             style={'width': '250px'}
                         )
                     ], style={'display': 'inline-block', 'marginRight': '20px'}),
@@ -206,7 +211,7 @@ app.layout = html.Div([
                         dcc.Dropdown(
                             id='availability-station-dropdown',
                             options=get_stations_list(),
-                            value='MER',
+                            value=default_station,
                             style={'width': '250px'}
                         )
                     ], style={'display': 'inline-block', 'marginRight': '20px'})
@@ -305,9 +310,10 @@ app.layout = html.Div([
      Output('plot-sodos', 'figure')],
     [Input('station-dropdown', 'value'),
      Input('date-picker', 'date'),
-     Input('window-slider', 'value')]
+     Input('window-slider', 'value'),
+     Input('initial-trigger', 'data')]
 )
-def update_all_pollutant_plots(selected_station, date, window_hours):
+def update_all_pollutant_plots(selected_station, date, window_hours, initial_trigger):
     """Update all pollutant plots based on selected station and parameters."""
     if not selected_station:
         empty_fig = go.Figure().add_annotation(
@@ -391,9 +397,10 @@ def update_all_pollutant_plots(selected_station, date, window_hours):
      Output('plot-wsp', 'figure')],
     [Input('met-station-dropdown', 'value'),
      Input('met-date-picker', 'date'),
-     Input('met-window-slider', 'value')]
+     Input('met-window-slider', 'value'),
+     Input('initial-trigger', 'data')]
 )
-def update_all_meteorology_plots(selected_station, date, window_hours):
+def update_all_meteorology_plots(selected_station, date, window_hours, initial_trigger):
     """Update all meteorology plots based on selected station and parameters."""
     if not selected_station:
         empty_fig = go.Figure().add_annotation(
@@ -482,9 +489,10 @@ def update_all_meteorology_plots(selected_station, date, window_hours):
      Output('availability-plot-tmp', 'figure'),
      Output('availability-plot-wdr', 'figure'),
      Output('availability-plot-wsp', 'figure')],
-    [Input('availability-station-dropdown', 'value')]
+    [Input('availability-station-dropdown', 'value'),
+     Input('initial-trigger', 'data')]
 )
-def update_all_availability_plots(selected_station):
+def update_all_availability_plots(selected_station, initial_trigger):
     """Update all data availability plots based on selected station."""
     if not selected_station:
         empty_fig = go.Figure().add_annotation(
