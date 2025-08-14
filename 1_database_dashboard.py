@@ -14,6 +14,7 @@ from db_utils.sql_con import POLLUTANT_MAPPING, METEOROLOGY_MAPPING
 from db_utils.queries_select import get_stations_data, get_station_name, get_pollutant_data, get_meteorology_data, get_pollutant_availability_data, get_meteorology_availability_data
 
 default_station = 'ACO'
+days_before = 5
 
 # Dashboard configuration
 DASHBOARD_CONFIG = {
@@ -61,7 +62,7 @@ app.layout = html.Div([
                         html.Label("Start Date:"),
                         dcc.DatePickerSingle(
                             id='date-picker',
-                            date=(datetime.now() - timedelta(days=10)).strftime('%Y-%m-%d'),
+                            date=(datetime.now() - timedelta(days=days_before)).strftime('%Y-%m-%d'),
                             style={'width': '200px'}
                         )
                     ], style={'display': 'inline-block', 'marginRight': '20px'}),
@@ -146,7 +147,7 @@ app.layout = html.Div([
                         html.Label("Start Date:"),
                         dcc.DatePickerSingle(
                             id='met-date-picker',
-                            date=(datetime.now() - timedelta(days=10)).strftime('%Y-%m-%d'),
+                            date=(datetime.now() - timedelta(days=days_before)).strftime('%Y-%m-%d'),
                             style={'width': '200px'}
                         )
                     ], style={'display': 'inline-block', 'marginRight': '20px'}),
@@ -379,7 +380,7 @@ def update_all_pollutant_plots(selected_station, date, window_hours, initial_tri
                 title=title,
                 xaxis_title="Date/Time",
                 yaxis_title="Concentration",
-                hovermode='x unified',
+                hovermode='closest',
                 margin=dict(l=50, r=20, t=50, b=50)
             )
         
@@ -466,7 +467,7 @@ def update_all_meteorology_plots(selected_station, date, window_hours, initial_t
                 title=title,
                 xaxis_title="Date/Time",
                 yaxis_title="Value",
-                hovermode='x unified',
+                hovermode='closest',
                 margin=dict(l=50, r=20, t=50, b=50)
             )
         
@@ -537,6 +538,7 @@ def update_all_availability_plots(selected_station, initial_trigger):
                 title=title,
                 xaxis_title="Month",
                 yaxis_title="Hourly Data Count",
+                hovermode='closest',
                 xaxis=dict(
                     range=['2000-01-01', '2025-12-31'],
                     type='date'
@@ -573,6 +575,7 @@ def update_all_availability_plots(selected_station, initial_trigger):
                 title=title,
                 xaxis_title="Month",
                 yaxis_title="Hourly Data Count",
+                hovermode='closest',
                 xaxis=dict(
                     range=['2000-01-01', '2025-12-31'],
                     type='date'

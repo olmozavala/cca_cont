@@ -11,7 +11,8 @@ source $ROOT_PATH/.venv/bin/activate
 
 # Function to get the previous month and year
 get_previous_month() {
-    local current_date=$(date +%Y-%m)
+    # Get current date in YYYY-MM-DD format to ensure proper month arithmetic
+    local current_date=$(date +%Y-%m-01)
     local previous_month=$(date -d "$current_date -1 month" +%Y-%m)
     local year=$(echo $previous_month | cut -d'-' -f1)
     local month=$(echo $previous_month | cut -d'-' -f2)

@@ -64,9 +64,8 @@ class ContIOTools:
         Returns:
             List[str]: List of pollutant table names
         """
-        # return ['cont_pmco', 'cont_pmdoscinco', 'cont_nox', 'cont_codos', 'cont_co', 
-                # 'cont_nodos', 'cont_no', 'cont_otres', 'cont_sodos', 'cont_pmdiez']
-        return ['cont_otres']
+        return ['cont_pmco', 'cont_pmdoscinco', 'cont_nox', 'cont_codos', 'cont_co', 'cont_nodos', 'cont_no', 'cont_otres', 'cont_sodos', 'cont_pmdiez']
+        #return ['cont_otres']
 
     def getContaminants(self) -> List[str]:
         """

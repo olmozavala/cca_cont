@@ -10,7 +10,7 @@ source $ROOT_PATH/.venv/bin/activate
 #conda activate cca_cont
 
 # Run the update script and save output to log file
-python $ROOT_PATH/2_update_last_hour.py --date 2025-08-06 --hour 14 --hours 23
+python $ROOT_PATH/2_update_last_hour.py
 
 # Deactivate virtual environment 
 deactivate

@@ -4,13 +4,18 @@ from .sql_con import get_db_engine, POLLUTANT_MAPPING, METEOROLOGY_MAPPING
 
 
 def get_stations_data():
-    """Fetch stations data for the dropdown."""
+    """Fetch stations data for the dropdown, filtering for stations with lastyear > 3000."""
     engine = get_db_engine()
     if engine is None:
         return pd.DataFrame()
     
     try:
-        query = "SELECT id, nombre, ST_X(geom) as longitude, ST_Y(geom) as latitude, altitude FROM cont_estaciones"
+        query = """
+        SELECT id, nombre, ST_X(geom) as longitude, ST_Y(geom) as latitude, altitude, lastyear 
+        FROM cont_estaciones 
+        WHERE lastyear > 3000
+        ORDER BY nombre
+        """
         df = pd.read_sql(query, engine)
         return df
     except Exception as e:

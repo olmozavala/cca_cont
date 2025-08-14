@@ -235,7 +235,7 @@ def main() -> None:
     """
     parser = argparse.ArgumentParser(description="Update pollutant and meteorological data by month.")
     parser.add_argument('--year', type=int, default=2025, help='Year to update (e.g., 2010)')
-    parser.add_argument('--month', type=int, default=7, help='Month to update (1-12)')
+    parser.add_argument('--month', type=int, default=8, help='Month to update (1-12)')
     parser.add_argument('--log-level', type=str, default='INFO', 
                        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'], 
                        help='Set the logging level')
@@ -263,12 +263,12 @@ def main() -> None:
     update_tables_by_month(oz_tools, tables, fields, month, year, month, year)
 
     # Update meteorological tables
-    # fields = oz_tools.getMeteoParams()
-    # tables = [oz_tools.findTable(field) for field in fields]
-    # logger.info(f"Updating meteorological tables for {year} - {month}")
-    # update_tables_by_month(oz_tools, tables, fields, month, year, month, year)
+    fields = oz_tools.getMeteoParams()
+    tables = [oz_tools.findTable(field) for field in fields]
+    logger.info(f"Updating meteorological tables for {year} - {month}")
+    update_tables_by_month(oz_tools, tables, fields, month, year, month, year)
     
-    # logger.info(f"Monthly data update process completed for {year} - {month}!")
+    logger.info(f"Monthly data update process completed for {year} - {month}!")
 
 
 if __name__ == "__main__":
