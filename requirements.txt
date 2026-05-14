@@ -1,5 +1,8 @@
 dash==2.14.2
+dash-bootstrap-components==1.5.0
 plotly==5.17.0
 pandas==2.1.4
 psycopg2-binary==2.9.9
-sqlalchemy==2.0.23 
+sqlalchemy==2.0.23
+PyYAML==6.0.2
+scikit-learn==1.4.0
