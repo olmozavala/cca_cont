@@ -1,0 +1,23 @@
+# Forecast issue hour to use as the sample time.
+issue_hour: 5
+
+# First forecast lead column to use.
+# 1 -> hour_p01..hour_p20
+# 6 -> hour_p06..hour_p25
+lead_forecast: 1
+
+# Number of consecutive forecast lead hours used as model inputs.
+horizon_hours: 20
+
+# Inclusive issue-date range. Samples use these dates at issue_hour.
+start_date: 2024-01-01
+end_date: 2024-12-31
+
+# Optional sorted station list. Leave empty to infer stations from forecast_otres.
+station_ids: []
+
+# Skip samples unless every station/lead feature and target is present.
+drop_missing: true
+
+output_path: nn_model_corrector/data/otres_daily_max_dataset.csv
+
