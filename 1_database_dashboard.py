@@ -1,596 +1,834 @@
-from typing import List, Dict, Any
+from typing import Any, Dict, List, Tuple
+
 import dash
-from dash import dcc, html, Input, Output, callback
-import plotly.graph_objects as go
-from datetime import datetime, timedelta
+import dash_bootstrap_components as dbc
 import pandas as pd
-import os
+import plotly.graph_objects as go
+from dash import Input, Output, callback, dcc, html
+from datetime import datetime, timedelta
 
-# Initialize the Dash app
-app = dash.Dash(__name__)
+from db_utils.queries_select import (
+    get_forecast_otres_all_stations_spatial_mean_max,
+    get_forecast_otres_mean_hour_p01,
+    get_meteorology_availability_data,
+    get_meteorology_data,
+    get_pollutant_availability_data,
+    get_pollutant_data,
+    get_station_name,
+    get_stations_data,
+)
+from db_utils.sql_con import METEOROLOGY_MAPPING, POLLUTANT_MAPPING
 
-# Import database utilities and queries
-from db_utils.sql_con import POLLUTANT_MAPPING, METEOROLOGY_MAPPING
-from db_utils.queries_select import get_stations_data, get_station_name, get_pollutant_data, get_meteorology_data, get_pollutant_availability_data, get_meteorology_availability_data
-
-default_station = 'ACO'
+default_station = "CCA"
 days_before = 5
 
-# Dashboard configuration
-DASHBOARD_CONFIG = {
-    'host': '0.0.0.0',
-    'port': 8050,
-    'debug': True
+POLLUTANT_KEYS: List[str] = ["otres", "co", "no", "nox", "pmdiez", "pmdoscinco", "sodos"]
+MET_KEYS: List[str] = ["pba", "rh", "tmp", "wdr", "wsp"]
+
+DASHBOARD_CONFIG: Dict[str, Any] = {
+    "host": "0.0.0.0",
+    "port": 8050,
+    "debug": True,
 }
 
-# Get stations for dropdown
-def get_stations_list():
-    """Get list of stations for dropdown."""
+SLIDER_MAX_HOURS: int = 24 * 30 * 6
+DEFAULT_WINDOW_HOURS: int = 12 * 24
+
+
+def get_stations_list() -> List[Dict[str, str]]:
+    """Return options for station dropdowns."""
     df = get_stations_data()
     if df.empty:
-        return [{'label': default_station, 'value': default_station}]
-    
-    station_options = [{'label': f"{row['nombre']} ({row['id']})", 'value': row['id']} for _, row in df.iterrows()]
-    station_options.append({'label': 'All stations', 'value': 'all_stations'})
-    return station_options
+        return [{"label": default_station, "value": default_station}]
+    options = [
+        {"label": f"{row['nombre']} ({row['id']})", "value": row["id"]}
+        for _, row in df.iterrows()
+    ]
+    options.append({"label": "All stations", "value": "all_stations"})
+    return options
 
-# App layout
-app.layout = html.Div([
-    # Store component to trigger initial callback
-    dcc.Store(id='initial-trigger', data=True),
-    
-    html.H1("Air Quality Data Analysis Dashboard", 
-             style={'textAlign': 'center', 'marginBottom': 30}),
-    
-    dcc.Tabs([
-        # Tab 1: Pollution By Station
-        dcc.Tab(label="Pollution By Station", children=[
-            html.Div([
-                # Controls row
-                html.Div([
-                    html.Div([
-                        html.Label("Station:"),
-                        dcc.Dropdown(
-                            id='station-dropdown',
-                            options=get_stations_list(),
-                            value=default_station,
-                            style={'width': '250px'}
-                        )
-                    ], style={'display': 'inline-block', 'marginRight': '20px'}),
-                    
-                    html.Div([
-                        html.Label("Start Date:"),
-                        dcc.DatePickerSingle(
-                            id='date-picker',
-                            date=(datetime.now() - timedelta(days=days_before)).strftime('%Y-%m-%d'),
-                            style={'width': '200px'}
-                        )
-                    ], style={'display': 'inline-block', 'marginRight': '20px'}),
-                    
-                    html.Div([
-                        html.Label("Window Size (hours):", style={'fontSize': '16px', 'fontWeight': 'bold'}),
-                        dcc.Slider(
-                            id='window-slider',
-                            min=1,
-                            max=24*30*6,  # 6 months in hours
-                            step=1,
-                            value=12*24,  # 12 days default
-                            marks={i: f'{i//24}d' if i % 24 == 0 else f'{i}h' 
-                                   for i in [1, 24, 7*24, 10*24, 30*24, 90*24, 180*24]},
-                            tooltip={"placement": "bottom", "always_visible": True}
-                        )
-                    ], style={'display': 'inline-block', 'width': '700px', 'marginTop': '10px'})
-                ], style={'marginBottom': '20px'}),
-                
-                # Pollutant plots - 2x3 grid
-                html.Div([
-                    # Row 1
-                    html.Div([
-                        html.Div([
-                            html.H4("Ozone (O₃)"),
-                            dcc.Graph(id='plot-otres', style={'height': '450px'})
-                        ], style={'width': '50%', 'display': 'inline-block'}),
-                        html.Div([
-                            html.H4("Carbon monoxide (CO)"),
-                            dcc.Graph(id='plot-co', style={'height': '450px'})
-                        ], style={'width': '50%', 'display': 'inline-block'})
-                    ]),
-                    # Row 2
-                    html.Div([
-                        html.Div([
-                            html.H4("Nitric oxide (NO)"),
-                            dcc.Graph(id='plot-no', style={'height': '450px'})
-                        ], style={'width': '50%', 'display': 'inline-block'}),
-                        html.Div([
-                            html.H4("Nitrogen oxides (NOₓ)"),
-                            dcc.Graph(id='plot-nox', style={'height': '450px'})
-                        ], style={'width': '50%', 'display': 'inline-block'})
-                    ]),
-                    # Row 3
-                    html.Div([
-                        html.Div([
-                            html.H4("Particulate matter ≤ 10 µm (PM₁₀)"),
-                            dcc.Graph(id='plot-pmdiez', style={'height': '450px'})
-                        ], style={'width': '50%', 'display': 'inline-block'}),
-                        html.Div([
-                            html.H4("Particulate matter ≤ 2.5 µm (PM₂.₅)"),
-                            dcc.Graph(id='plot-pmdoscinco', style={'height': '450px'})
-                        ], style={'width': '50%', 'display': 'inline-block'})
-                    ]),
-                    # Row 4 - Single plot for CO₂
-                    html.Div([
-                        html.Div([
-                            html.H4("Carbon dioxide (CO₂)"),
-                            dcc.Graph(id='plot-sodos', style={'height': '450px'})
-                        ], style={'width': '50%', 'display': 'inline-block'})
-                    ])
-                ])
-            ])
-        ]),
-        
-        # Tab 2: Meteorology By Station
-        dcc.Tab(label="Meteorology By Station", children=[
-            html.Div([
-                # Controls row
-                html.Div([
-                    html.Div([
-                        html.Label("Station:"),
-                        dcc.Dropdown(
-                            id='met-station-dropdown',
-                            options=get_stations_list(),
-                            value=default_station,
-                            style={'width': '250px'}
-                        )
-                    ], style={'display': 'inline-block', 'marginRight': '20px'}),
-                    
-                    html.Div([
-                        html.Label("Start Date:"),
-                        dcc.DatePickerSingle(
-                            id='met-date-picker',
-                            date=(datetime.now() - timedelta(days=days_before)).strftime('%Y-%m-%d'),
-                            style={'width': '200px'}
-                        )
-                    ], style={'display': 'inline-block', 'marginRight': '20px'}),
-                    
-                    html.Div([
-                        html.Label("Window Size (hours):", style={'fontSize': '16px', 'fontWeight': 'bold'}),
-                        dcc.Slider(
-                            id='met-window-slider',
-                            min=1,
-                            max=24*30*6,  # 6 months in hours
-                            step=1,
-                            value=12*24,  # 12 days default
-                            marks={i: f'{i//24}d' if i % 24 == 0 else f'{i}h' 
-                                   for i in [1, 24, 7*24, 10*24, 30*24, 90*24, 180*24]},
-                            tooltip={"placement": "bottom", "always_visible": True}
-                        )
-                    ], style={'display': 'inline-block', 'width': '700px', 'marginTop': '10px'})
-                ], style={'marginBottom': '20px'}),
-                
-                # Meteorology plots - 2x3 grid
-                html.Div([
-                    # Row 1
-                    html.Div([
-                        html.Div([
-                            html.H4("Atmospheric pressure (PBA)"),
-                            dcc.Graph(id='plot-pba', style={'height': '450px'})
-                        ], style={'width': '50%', 'display': 'inline-block'}),
-                        html.Div([
-                            html.H4("Relative humidity (RH)"),
-                            dcc.Graph(id='plot-rh', style={'height': '450px'})
-                        ], style={'width': '50%', 'display': 'inline-block'})
-                    ]),
-                    # Row 2
-                    html.Div([
-                        html.Div([
-                            html.H4("Temperature (TMP)"),
-                            dcc.Graph(id='plot-tmp', style={'height': '450px'})
-                        ], style={'width': '50%', 'display': 'inline-block'}),
-                        html.Div([
-                            html.H4("Wind direction (WDR)"),
-                            dcc.Graph(id='plot-wdr', style={'height': '450px'})
-                        ], style={'width': '50%', 'display': 'inline-block'})
-                    ]),
-                    # Row 3 - Single plot for Wind speed
-                    html.Div([
-                        html.Div([
-                            html.H4("Wind speed (WSP)"),
-                            dcc.Graph(id='plot-wsp', style={'height': '450px'})
-                        ], style={'width': '50%', 'display': 'inline-block'})
-                    ])
-                ])
-            ])
-        ]),
-        
-        # Tab 3: Data Availability
-        dcc.Tab(label="Data Availability", children=[
-            html.Div([
-                # Controls row
-                html.Div([
-                    html.Div([
-                        html.Label("Station:"),
-                        dcc.Dropdown(
-                            id='availability-station-dropdown',
-                            options=get_stations_list(),
-                            value=default_station,
-                            style={'width': '250px'}
-                        )
-                    ], style={'display': 'inline-block', 'marginRight': '20px'})
-                ], style={'marginBottom': '20px'}),
-                
-                # Data availability plots - 2-column grid
-                html.Div([
-                    # Row 1 - Pollutants
-                    html.Div([
-                        html.Div([
-                            html.H4("Ozone (O₃) - Data Availability"),
-                            dcc.Graph(id='availability-plot-otres', style={'height': '400px'})
-                        ], style={'width': '50%', 'display': 'inline-block'}),
-                        html.Div([
-                            html.H4("Carbon monoxide (CO) - Data Availability"),
-                            dcc.Graph(id='availability-plot-co', style={'height': '400px'})
-                        ], style={'width': '50%', 'display': 'inline-block'})
-                    ]),
-                    # Row 2 - Pollutants
-                    html.Div([
-                        html.Div([
-                            html.H4("Nitric oxide (NO) - Data Availability"),
-                            dcc.Graph(id='availability-plot-no', style={'height': '400px'})
-                        ], style={'width': '50%', 'display': 'inline-block'}),
-                        html.Div([
-                            html.H4("Nitrogen oxides (NOₓ) - Data Availability"),
-                            dcc.Graph(id='availability-plot-nox', style={'height': '400px'})
-                        ], style={'width': '50%', 'display': 'inline-block'})
-                    ]),
-                    # Row 3 - Pollutants
-                    html.Div([
-                        html.Div([
-                            html.H4("Particulate matter ≤ 10 µm (PM₁₀) - Data Availability"),
-                            dcc.Graph(id='availability-plot-pmdiez', style={'height': '400px'})
-                        ], style={'width': '50%', 'display': 'inline-block'}),
-                        html.Div([
-                            html.H4("Particulate matter ≤ 2.5 µm (PM₂.₅) - Data Availability"),
-                            dcc.Graph(id='availability-plot-pmdoscinco', style={'height': '400px'})
-                        ], style={'width': '50%', 'display': 'inline-block'})
-                    ]),
-                    # Row 4 - Pollutants
-                    html.Div([
-                        html.Div([
-                            html.H4("Carbon dioxide (CO₂) - Data Availability"),
-                            dcc.Graph(id='availability-plot-sodos', style={'height': '400px'})
-                        ], style={'width': '50%', 'display': 'inline-block'})
-                    ]),
-                    # Row 5 - Meteorology
-                    html.Div([
-                        html.Div([
-                            html.H4("Atmospheric pressure (PBA) - Data Availability"),
-                            dcc.Graph(id='availability-plot-pba', style={'height': '400px'})
-                        ], style={'width': '50%', 'display': 'inline-block'}),
-                        html.Div([
-                            html.H4("Relative humidity (RH) - Data Availability"),
-                            dcc.Graph(id='availability-plot-rh', style={'height': '400px'})
-                        ], style={'width': '50%', 'display': 'inline-block'})
-                    ]),
-                    # Row 6 - Meteorology
-                    html.Div([
-                        html.Div([
-                            html.H4("Temperature (TMP) - Data Availability"),
-                            dcc.Graph(id='availability-plot-tmp', style={'height': '400px'})
-                        ], style={'width': '50%', 'display': 'inline-block'}),
-                        html.Div([
-                            html.H4("Wind direction (WDR) - Data Availability"),
-                            dcc.Graph(id='availability-plot-wdr', style={'height': '400px'})
-                        ], style={'width': '50%', 'display': 'inline-block'})
-                    ]),
-                    # Row 7 - Meteorology
-                    html.Div([
-                        html.Div([
-                            html.H4("Wind speed (WSP) - Data Availability"),
-                            dcc.Graph(id='availability-plot-wsp', style={'height': '400px'})
-                        ], style={'width': '50%', 'display': 'inline-block'})
-                    ])
-                ])
-            ])
-        ]),
-        
-        # Placeholder for additional tabs
-        dcc.Tab(label="Additional Analysis", children=[
-            html.H3("Additional analysis tabs will be added here")
-        ])
-    ])
-])
 
-# Callback to update all pollutant plots
-@app.callback(
-    [Output('plot-otres', 'figure'),
-     Output('plot-co', 'figure'),
-     Output('plot-no', 'figure'),
-     Output('plot-nox', 'figure'),
-     Output('plot-pmdiez', 'figure'),
-     Output('plot-pmdoscinco', 'figure'),
-     Output('plot-sodos', 'figure')],
-    [Input('station-dropdown', 'value'),
-     Input('date-picker', 'date'),
-     Input('window-slider', 'value'),
-     Input('initial-trigger', 'data')]
+def _slider_marks() -> Dict[int, str]:
+    """Hour marks for time-window sliders."""
+    return {
+        i: f"{i // 24}d" if i % 24 == 0 else f"{i}h"
+        for i in [1, 24, 7 * 24, 10 * 24, 30 * 24, 90 * 24, 180 * 24]
+    }
+
+
+def _graph_card(title: str, graph_id: str, height: str = "440px") -> dbc.Card:
+    """Bootstrap card wrapping a Plotly graph."""
+    return dbc.Card(
+        [
+            dbc.CardHeader(title, className="fw-semibold py-2 bg-light border-0"),
+            dbc.CardBody(
+                dcc.Graph(id=graph_id, style={"height": height}, config={"displayModeBar": True}),
+                className="p-2 pt-0",
+            ),
+        ],
+        className="mb-3 shadow-sm border-0 h-100",
+    )
+
+
+def _control_card_pollution() -> dbc.Card:
+    """Filters for pollution tab."""
+    return dbc.Card(
+        dbc.CardBody(
+            dbc.Row(
+                [
+                    dbc.Col(
+                        [
+                            dbc.Label("Station", className="small text-muted mb-1"),
+                            dcc.Dropdown(
+                                id="station-dropdown",
+                                options=get_stations_list(),
+                                value=default_station,
+                                clearable=False,
+                                className="dash-bootstrap",
+                            ),
+                        ],
+                        xs=12,
+                        md=6,
+                        lg=4,
+                    ),
+                    dbc.Col(
+                        [
+                            dbc.Label("Start date", className="small text-muted mb-1"),
+                            dcc.DatePickerSingle(
+                                id="date-picker",
+                                date=(datetime.now() - timedelta(days=days_before)).strftime("%Y-%m-%d"),
+                                display_format="YYYY-MM-DD",
+                                className="w-100",
+                            ),
+                        ],
+                        xs=12,
+                        md=6,
+                        lg=3,
+                    ),
+                    dbc.Col(
+                        [
+                            dbc.Label("Time window (hours)", className="small text-muted mb-1"),
+                            dcc.Slider(
+                                id="window-slider",
+                                min=1,
+                                max=SLIDER_MAX_HOURS,
+                                step=1,
+                                value=DEFAULT_WINDOW_HOURS,
+                                marks=_slider_marks(),
+                                tooltip={"placement": "bottom", "always_visible": True},
+                            ),
+                        ],
+                        xs=12,
+                        lg=5,
+                    ),
+                ],
+                className="g-3 align-items-end",
+            )
+        ),
+        className="mb-3 border-0 shadow-sm",
+    )
+
+
+def _control_card_meteorology() -> dbc.Card:
+    """Filters for meteorology tab."""
+    return dbc.Card(
+        dbc.CardBody(
+            dbc.Row(
+                [
+                    dbc.Col(
+                        [
+                            dbc.Label("Station", className="small text-muted mb-1"),
+                            dcc.Dropdown(
+                                id="met-station-dropdown",
+                                options=get_stations_list(),
+                                value=default_station,
+                                clearable=False,
+                                className="dash-bootstrap",
+                            ),
+                        ],
+                        xs=12,
+                        md=6,
+                        lg=4,
+                    ),
+                    dbc.Col(
+                        [
+                            dbc.Label("Start date", className="small text-muted mb-1"),
+                            dcc.DatePickerSingle(
+                                id="met-date-picker",
+                                date=(datetime.now() - timedelta(days=days_before)).strftime("%Y-%m-%d"),
+                                display_format="YYYY-MM-DD",
+                                className="w-100",
+                            ),
+                        ],
+                        xs=12,
+                        md=6,
+                        lg=3,
+                    ),
+                    dbc.Col(
+                        [
+                            dbc.Label("Time window (hours)", className="small text-muted mb-1"),
+                            dcc.Slider(
+                                id="met-window-slider",
+                                min=1,
+                                max=SLIDER_MAX_HOURS,
+                                step=1,
+                                value=DEFAULT_WINDOW_HOURS,
+                                marks=_slider_marks(),
+                                tooltip={"placement": "bottom", "always_visible": True},
+                            ),
+                        ],
+                        xs=12,
+                        lg=5,
+                    ),
+                ],
+                className="g-3 align-items-end",
+            )
+        ),
+        className="mb-3 border-0 shadow-sm",
+    )
+
+
+def _control_card_availability() -> dbc.Card:
+    """Filters for data availability tab."""
+    return dbc.Card(
+        dbc.CardBody(
+            dbc.Row(
+                [
+                    dbc.Col(
+                        [
+                            dbc.Label("Station", className="small text-muted mb-1"),
+                            dcc.Dropdown(
+                                id="availability-station-dropdown",
+                                options=get_stations_list(),
+                                value=default_station,
+                                clearable=False,
+                                className="dash-bootstrap",
+                            ),
+                        ],
+                        xs=12,
+                        md=6,
+                        lg=4,
+                    ),
+                ],
+                className="g-3",
+            )
+        ),
+        className="mb-3 border-0 shadow-sm",
+    )
+
+
+def _rows_of_cards(pairs: List[Tuple[str, str]], height: str = "440px") -> List[dbc.Row]:
+    """Build responsive rows with two graph cards per row on medium+ screens."""
+    rows: List[dbc.Row] = []
+    for i in range(0, len(pairs), 2):
+        chunk = pairs[i : i + 2]
+        cols = [
+            dbc.Col(_graph_card(title, gid, height=height), xs=12, md=6, className="mb-0")
+            for title, gid in chunk
+        ]
+        rows.append(dbc.Row(cols, className="g-3 mb-1"))
+    return rows
+
+
+def _pollution_plot_pairs() -> List[Tuple[str, str]]:
+    return [(POLLUTANT_MAPPING[k], f"plot-{k}") for k in POLLUTANT_KEYS]
+
+
+def _meteorology_plot_pairs() -> List[Tuple[str, str]]:
+    return [(METEOROLOGY_MAPPING[k], f"plot-{k}") for k in MET_KEYS]
+
+
+def _availability_plot_pairs() -> List[Tuple[str, str]]:
+    poll = [
+        (f"{POLLUTANT_MAPPING[k]} — monthly counts", f"availability-plot-{k}")
+        for k in POLLUTANT_KEYS
+    ]
+    met = [
+        (f"{METEOROLOGY_MAPPING[k]} — monthly counts", f"availability-plot-{k}")
+        for k in MET_KEYS
+    ]
+    return poll + met
+
+
+def _build_layout() -> dbc.Container:
+    """Assemble the full app layout with Bootstrap components."""
+    pollution_body = [_control_card_pollution()]
+    pollution_body.extend(_rows_of_cards(_pollution_plot_pairs()))
+
+    met_body = [_control_card_meteorology()]
+    met_body.extend(_rows_of_cards(_meteorology_plot_pairs()))
+
+    avail_body = [_control_card_availability()]
+    avail_body.extend(_rows_of_cards(_availability_plot_pairs(), height="400px"))
+
+    tabs = dbc.Tabs(
+        [
+            dbc.Tab(
+                dbc.Container(pollution_body, fluid=True, className="py-2"),
+                label="Pollution by station",
+                tab_id="tab-pollution",
+            ),
+            dbc.Tab(
+                dbc.Container(met_body, fluid=True, className="py-2"),
+                label="Meteorology by station",
+                tab_id="tab-meteorology",
+            ),
+            dbc.Tab(
+                dbc.Container(avail_body, fluid=True, className="py-2"),
+                label="Data availability",
+                tab_id="tab-availability",
+            ),
+            dbc.Tab(
+                dbc.Container(
+                    dbc.Alert(
+                        [
+                            html.Strong("Coming soon."),
+                            " Additional analysis views can be added here.",
+                        ],
+                        color="info",
+                        className="mt-2 border-0 shadow-sm",
+                    ),
+                    fluid=True,
+                    className="py-4",
+                ),
+                label="Additional analysis",
+                tab_id="tab-extra",
+            ),
+        ],
+        id="main-tabs",
+        active_tab="tab-pollution",
+        className="mb-2 nav-pills",
+        persistence=True,
+        persistence_type="session",
+    )
+
+    return dbc.Container(
+        [
+            dcc.Store(id="initial-trigger", data=True),
+            dbc.NavbarSimple(
+                children=[
+                    dbc.Badge("Live data", color="light", className="text-primary ms-2", pill=True),
+                ],
+                brand="Air quality analysis",
+                brand_href="#",
+                color="primary",
+                dark=True,
+                className="mb-3 shadow-sm rounded",
+                fluid=True,
+            ),
+            html.P(
+                "Explore station time series and monthly record counts. "
+                "Use the time window control to adjust the range after the selected start date.",
+                className="text-muted lead small mb-3",
+            ),
+            tabs,
+            html.Footer(
+                dbc.Container(
+                    html.Small(
+                        "Dashboard · PostgreSQL contingencia schema",
+                        className="text-muted",
+                    ),
+                    fluid=True,
+                    className="py-4 text-center",
+                )
+            ),
+        ],
+        fluid=True,
+        className="px-3 pb-5 app-container",
+    )
+
+
+app = dash.Dash(
+    __name__,
+    external_stylesheets=[dbc.themes.FLATLY, dbc.icons.BOOTSTRAP],
+    title="Air quality dashboard",
+    suppress_callback_exceptions=False,
 )
-def update_all_pollutant_plots(selected_station, date, window_hours, initial_trigger):
+app.layout = _build_layout()
+
+
+def _apply_figure_style(fig: go.Figure) -> None:
+    """Align Plotly with Bootstrap light theme."""
+    fig.update_layout(
+        template="plotly_white",
+        font=dict(family="system-ui, -apple-system, 'Segoe UI', sans-serif", size=12),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(248,249,250,0.6)",
+        margin=dict(l=48, r=24, t=56, b=48),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+
+
+def _append_forecast_otres_mean_hour_p01(
+    fig: go.Figure,
+    forecast_df: pd.DataFrame,
+    selected_station: str,
+) -> None:
+    """
+    Overlay forecast from ``forecast_otres``.
+
+    * Single station: one black line (mean ``COALESCE(hour_p01, val)`` per time).
+    * All stations: black solid = spatial mean across stations; blue dashed = spatial max.
+    """
+    if forecast_df.empty:
+        return
+
+    if selected_station == "all_stations" and "max_hour_p01" in forecast_df.columns:
+        mean_df = forecast_df.dropna(subset=["mean_hour_p01"])
+        if not mean_df.empty:
+            fig.add_trace(
+                go.Scatter(
+                    x=mean_df["fecha"],
+                    y=mean_df["mean_hour_p01"],
+                    mode="lines",
+                    name="Forecast mean (all stations)",
+                    line=dict(color="#000000", width=2.5),
+                    legendgroup="forecast_otres_mean",
+                )
+            )
+        max_df = forecast_df.dropna(subset=["max_hour_p01"])
+        if not max_df.empty:
+            fig.add_trace(
+                go.Scatter(
+                    x=max_df["fecha"],
+                    y=max_df["max_hour_p01"],
+                    mode="lines",
+                    name="Forecast max (all stations)",
+                    line=dict(color="#2171b5", width=2.5, dash="dash"),
+                    legendgroup="forecast_otres_max",
+                )
+            )
+        return
+
+    plot_df = forecast_df.dropna(subset=["mean_hour_p01"])
+    if plot_df.empty:
+        return
+    fig.add_trace(
+        go.Scatter(
+            x=plot_df["fecha"],
+            y=plot_df["mean_hour_p01"],
+            mode="lines",
+            name="Forecast mean (lead 1 h)",
+            line=dict(color="#000000", width=2.5),
+            legendgroup="forecast_otres",
+        )
+    )
+
+
+def _forecast_otres_has_any_points(forecast_df: pd.DataFrame) -> bool:
+    """True if any forecast trace would have at least one y value."""
+    if forecast_df.empty:
+        return False
+    if "max_hour_p01" in forecast_df.columns:
+        return bool(
+            forecast_df["mean_hour_p01"].notna().any()
+            or forecast_df["max_hour_p01"].notna().any()
+        )
+    return bool(forecast_df["mean_hour_p01"].notna().any())
+
+
+def _annotate_forecast_missing_in_range(fig: go.Figure) -> None:
+    """Explain on-chart when observations exist but no forecast rows were returned."""
+    fig.add_annotation(
+        x=0.01,
+        y=0.99,
+        xref="paper",
+        yref="paper",
+        text=(
+            "No forecast_otres rows in this date range (or query failed — check DB and logs). "
+            "All-stations view expects spatial mean/max series."
+        ),
+        showarrow=False,
+        xanchor="left",
+        yanchor="top",
+        font=dict(size=11, color="#6c757d"),
+        bgcolor="rgba(255,255,255,0.92)",
+        bordercolor="#dee2e6",
+        borderwidth=1,
+        borderpad=6,
+    )
+
+
+@app.callback(
+    [
+        Output("plot-otres", "figure"),
+        Output("plot-co", "figure"),
+        Output("plot-no", "figure"),
+        Output("plot-nox", "figure"),
+        Output("plot-pmdiez", "figure"),
+        Output("plot-pmdoscinco", "figure"),
+        Output("plot-sodos", "figure"),
+    ],
+    [
+        Input("station-dropdown", "value"),
+        Input("date-picker", "date"),
+        Input("window-slider", "value"),
+        Input("initial-trigger", "data"),
+    ],
+)
+def update_all_pollutant_plots(
+    selected_station: str,
+    date: str,
+    window_hours: int,
+    initial_trigger: bool,
+) -> Tuple[go.Figure, ...]:
     """Update all pollutant plots based on selected station and parameters."""
+    del initial_trigger  # present to run on load
+
     if not selected_station:
-        empty_fig = go.Figure().add_annotation(
+        empty = go.Figure()
+        empty.add_annotation(
             text="No station selected",
-            xref="paper", yref="paper",
-            x=0.5, y=0.5, showarrow=False
+            xref="paper",
+            yref="paper",
+            x=0.5,
+            y=0.5,
+            showarrow=False,
         )
-        return [empty_fig] * 7  # Return empty figures for all 7 pollutants
-    
+        _apply_figure_style(empty)
+        return tuple([empty] * 7)
+
     if not date:
-        empty_fig = go.Figure().add_annotation(
+        empty = go.Figure()
+        empty.add_annotation(
             text="No date selected",
-            xref="paper", yref="paper",
-            x=0.5, y=0.5, showarrow=False
+            xref="paper",
+            yref="paper",
+            x=0.5,
+            y=0.5,
+            showarrow=False,
         )
-        return [empty_fig] * 7  # Return empty figures for all 7 pollutants
-    
-    start_date = datetime.fromisoformat(date.replace('-', '-'))
+        _apply_figure_style(empty)
+        return tuple([empty] * 7)
+
+    start_date = datetime.fromisoformat(date)
     station_display_name = get_station_name(selected_station)
-    
-    # Define pollutants and their plot IDs
-    pollutants = ['otres', 'co', 'no', 'nox', 'pmdiez', 'pmdoscinco', 'sodos']
-    
-    figures = []
-    
-    for pollutant in pollutants:
+    figures: List[go.Figure] = []
+
+    for pollutant in POLLUTANT_KEYS:
         df = get_pollutant_data(selected_station, pollutant, start_date, window_hours)
-        
-        if df.empty:
-            fig = go.Figure().add_annotation(
-                text=f"No data available for {POLLUTANT_MAPPING.get(pollutant, pollutant)}",
-                xref="paper", yref="paper",
-                x=0.5, y=0.5, showarrow=False
+        label = POLLUTANT_MAPPING.get(pollutant, pollutant)
+        forecast_df = (
+            (
+                get_forecast_otres_all_stations_spatial_mean_max(start_date, window_hours)
+                if selected_station == "all_stations"
+                else get_forecast_otres_mean_hour_p01(
+                    selected_station, start_date, window_hours
+                )
             )
+            if pollutant == "otres"
+            else pd.DataFrame()
+        )
+
+        if df.empty:
+            if pollutant == "otres" and _forecast_otres_has_any_points(forecast_df):
+                fig = go.Figure()
+                _append_forecast_otres_mean_hour_p01(fig, forecast_df, selected_station)
+                if selected_station == "all_stations":
+                    title = f"All stations — {label} (forecast mean / max only)"
+                else:
+                    title = (
+                        f"{station_display_name} — {label} "
+                        "(forecast mean hour_p01 only; no observations)"
+                    )
+                fig.update_layout(
+                    title=dict(text=title, font=dict(size=14)),
+                    xaxis_title="Date / time (UTC)",
+                    yaxis_title="Value",
+                    hovermode="closest",
+                )
+            else:
+                fig = go.Figure()
+                fig.add_annotation(
+                    text=f"No data available for {label}",
+                    xref="paper",
+                    yref="paper",
+                    x=0.5,
+                    y=0.5,
+                    showarrow=False,
+                )
         else:
             fig = go.Figure()
-            
-            if selected_station == 'all_stations' and 'id_est' in df.columns:
-                # Plot data for all stations
-                for station in df['id_est'].unique():
-                    station_data = df[df['id_est'] == station]
-                    fig.add_trace(go.Scatter(
-                        x=station_data['fecha'],
-                        y=station_data['val'],
-                        mode='lines+markers',
-                        name=f"Station {station}",
-                        marker=dict(size=3)
-                    ))
-                title = f"All Stations - {POLLUTANT_MAPPING.get(pollutant, pollutant)}"
+            if selected_station == "all_stations" and "id_est" in df.columns:
+                for station in df["id_est"].unique():
+                    station_data = df[df["id_est"] == station]
+                    fig.add_trace(
+                        go.Scatter(
+                            x=station_data["fecha"],
+                            y=station_data["val"],
+                            mode="lines+markers",
+                            name=str(station),
+                            marker=dict(size=3),
+                            line=dict(width=1),
+                        )
+                    )
+                title = f"All stations — {label}"
             else:
-                # Plot data for single station
-                fig.add_trace(go.Scatter(
-                    x=df['fecha'],
-                    y=df['val'],
-                    mode='lines+markers',
-                    name=POLLUTANT_MAPPING.get(pollutant, pollutant),
-                    line=dict(color='red', width=2),
-                    marker=dict(size=3)
-                ))
-                title = f"{station_display_name} - {POLLUTANT_MAPPING.get(pollutant, pollutant)}"
-            
-            fig.update_layout(
-                title=title,
-                xaxis_title="Date/Time",
-                yaxis_title="Concentration",
-                hovermode='closest',
-                margin=dict(l=50, r=20, t=50, b=50)
-            )
-        
-        figures.append(fig)
-    
-    return figures
+                fig.add_trace(
+                    go.Scatter(
+                        x=df["fecha"],
+                        y=df["val"],
+                        mode="lines+markers",
+                        name=label,
+                        line=dict(color="#d62728", width=2),
+                        marker=dict(size=4),
+                    )
+                )
+                title = f"{station_display_name} — {label}"
 
-
-# Callback to update all meteorology plots
-@app.callback(
-    [Output('plot-pba', 'figure'),
-     Output('plot-rh', 'figure'),
-     Output('plot-tmp', 'figure'),
-     Output('plot-wdr', 'figure'),
-     Output('plot-wsp', 'figure')],
-    [Input('met-station-dropdown', 'value'),
-     Input('met-date-picker', 'date'),
-     Input('met-window-slider', 'value'),
-     Input('initial-trigger', 'data')]
-)
-def update_all_meteorology_plots(selected_station, date, window_hours, initial_trigger):
-    """Update all meteorology plots based on selected station and parameters."""
-    if not selected_station:
-        empty_fig = go.Figure().add_annotation(
-            text="No station selected",
-            xref="paper", yref="paper",
-            x=0.5, y=0.5, showarrow=False
-        )
-        return [empty_fig] * 5  # Return empty figures for all 5 meteorology fields
-    
-    if not date:
-        empty_fig = go.Figure().add_annotation(
-            text="No date selected",
-            xref="paper", yref="paper",
-            x=0.5, y=0.5, showarrow=False
-        )
-        return [empty_fig] * 5  # Return empty figures for all 5 meteorology fields
-    
-    start_date = datetime.fromisoformat(date.replace('-', '-'))
-    station_display_name = get_station_name(selected_station)
-    
-    # Define meteorology fields and their plot IDs
-    meteorology_fields = ['pba', 'rh', 'tmp', 'wdr', 'wsp']
-    
-    figures = []
-    
-    for field in meteorology_fields:
-        df = get_meteorology_data(selected_station, field, start_date, window_hours)
-        
-        if df.empty:
-            fig = go.Figure().add_annotation(
-                text=f"No data available for {METEOROLOGY_MAPPING.get(field, field)}",
-                xref="paper", yref="paper",
-                x=0.5, y=0.5, showarrow=False
-            )
-        else:
-            fig = go.Figure()
-            
-            if selected_station == 'all_stations' and 'id_est' in df.columns:
-                # Plot data for all stations
-                for station in df['id_est'].unique():
-                    station_data = df[df['id_est'] == station]
-                    fig.add_trace(go.Scatter(
-                        x=station_data['fecha'],
-                        y=station_data['val'],
-                        mode='lines+markers',
-                        name=f"Station {station}",
-                        marker=dict(size=3)
-                    ))
-                title = f"All Stations - {METEOROLOGY_MAPPING.get(field, field)}"
-            else:
-                # Plot data for single station
-                fig.add_trace(go.Scatter(
-                    x=df['fecha'],
-                    y=df['val'],
-                    mode='lines+markers',
-                    name=METEOROLOGY_MAPPING.get(field, field),
-                    line=dict(color='blue', width=2),
-                    marker=dict(size=3)
-                ))
-                title = f"{station_display_name} - {METEOROLOGY_MAPPING.get(field, field)}"
-            
             fig.update_layout(
-                title=title,
-                xaxis_title="Date/Time",
+                title=dict(text=title, font=dict(size=14)),
+                xaxis_title="Date / time (UTC)",
                 yaxis_title="Value",
-                hovermode='closest',
-                margin=dict(l=50, r=20, t=50, b=50)
+                hovermode="closest",
             )
-        
+            if pollutant == "otres":
+                _append_forecast_otres_mean_hour_p01(fig, forecast_df, selected_station)
+                if not _forecast_otres_has_any_points(forecast_df):
+                    _annotate_forecast_missing_in_range(fig)
+
+        _apply_figure_style(fig)
         figures.append(fig)
-    
-    return figures
+
+    return tuple(figures)
 
 
-# Callback to update all data availability plots
 @app.callback(
-    [Output('availability-plot-otres', 'figure'),
-     Output('availability-plot-co', 'figure'),
-     Output('availability-plot-no', 'figure'),
-     Output('availability-plot-nox', 'figure'),
-     Output('availability-plot-pmdiez', 'figure'),
-     Output('availability-plot-pmdoscinco', 'figure'),
-     Output('availability-plot-sodos', 'figure'),
-     Output('availability-plot-pba', 'figure'),
-     Output('availability-plot-rh', 'figure'),
-     Output('availability-plot-tmp', 'figure'),
-     Output('availability-plot-wdr', 'figure'),
-     Output('availability-plot-wsp', 'figure')],
-    [Input('availability-station-dropdown', 'value'),
-     Input('initial-trigger', 'data')]
+    [
+        Output("plot-pba", "figure"),
+        Output("plot-rh", "figure"),
+        Output("plot-tmp", "figure"),
+        Output("plot-wdr", "figure"),
+        Output("plot-wsp", "figure"),
+    ],
+    [
+        Input("met-station-dropdown", "value"),
+        Input("met-date-picker", "date"),
+        Input("met-window-slider", "value"),
+        Input("initial-trigger", "data"),
+    ],
 )
-def update_all_availability_plots(selected_station, initial_trigger):
-    """Update all data availability plots based on selected station."""
+def update_all_meteorology_plots(
+    selected_station: str,
+    date: str,
+    window_hours: int,
+    initial_trigger: bool,
+) -> Tuple[go.Figure, ...]:
+    """Update all meteorology plots based on selected station and parameters."""
+    del initial_trigger
+
     if not selected_station:
-        empty_fig = go.Figure().add_annotation(
+        empty = go.Figure()
+        empty.add_annotation(
             text="No station selected",
-            xref="paper", yref="paper",
-            x=0.5, y=0.5, showarrow=False
+            xref="paper",
+            yref="paper",
+            x=0.5,
+            y=0.5,
+            showarrow=False,
         )
-        return [empty_fig] * 12  # Return empty figures for all 12 plots
-    
+        _apply_figure_style(empty)
+        return tuple([empty] * 5)
+
+    if not date:
+        empty = go.Figure()
+        empty.add_annotation(
+            text="No date selected",
+            xref="paper",
+            yref="paper",
+            x=0.5,
+            y=0.5,
+            showarrow=False,
+        )
+        _apply_figure_style(empty)
+        return tuple([empty] * 5)
+
+    start_date = datetime.fromisoformat(date)
     station_display_name = get_station_name(selected_station)
-    
-    # Define pollutants and meteorology fields
-    pollutants = ['otres', 'co', 'no', 'nox', 'pmdiez', 'pmdoscinco', 'sodos']
-    meteorology_fields = ['pba', 'rh', 'tmp', 'wdr', 'wsp']
-    
-    figures = []
-    
-    # Process pollutant availability plots
-    for pollutant in pollutants:
+    figures: List[go.Figure] = []
+
+    for field in MET_KEYS:
+        df = get_meteorology_data(selected_station, field, start_date, window_hours)
+        label = METEOROLOGY_MAPPING.get(field, field)
+
+        if df.empty:
+            fig = go.Figure()
+            fig.add_annotation(
+                text=f"No data available for {label}",
+                xref="paper",
+                yref="paper",
+                x=0.5,
+                y=0.5,
+                showarrow=False,
+            )
+        else:
+            fig = go.Figure()
+            if selected_station == "all_stations" and "id_est" in df.columns:
+                for station in df["id_est"].unique():
+                    station_data = df[df["id_est"] == station]
+                    fig.add_trace(
+                        go.Scatter(
+                            x=station_data["fecha"],
+                            y=station_data["val"],
+                            mode="lines+markers",
+                            name=str(station),
+                            marker=dict(size=3),
+                            line=dict(width=1),
+                        )
+                    )
+                title = f"All stations — {label}"
+            else:
+                fig.add_trace(
+                    go.Scatter(
+                        x=df["fecha"],
+                        y=df["val"],
+                        mode="lines+markers",
+                        name=label,
+                        line=dict(color="#1f77b4", width=2),
+                        marker=dict(size=4),
+                    )
+                )
+                title = f"{station_display_name} — {label}"
+
+            fig.update_layout(
+                title=dict(text=title, font=dict(size=14)),
+                xaxis_title="Date / time (UTC)",
+                yaxis_title="Value",
+                hovermode="closest",
+            )
+
+        _apply_figure_style(fig)
+        figures.append(fig)
+
+    return tuple(figures)
+
+
+@app.callback(
+    [
+        Output("availability-plot-otres", "figure"),
+        Output("availability-plot-co", "figure"),
+        Output("availability-plot-no", "figure"),
+        Output("availability-plot-nox", "figure"),
+        Output("availability-plot-pmdiez", "figure"),
+        Output("availability-plot-pmdoscinco", "figure"),
+        Output("availability-plot-sodos", "figure"),
+        Output("availability-plot-pba", "figure"),
+        Output("availability-plot-rh", "figure"),
+        Output("availability-plot-tmp", "figure"),
+        Output("availability-plot-wdr", "figure"),
+        Output("availability-plot-wsp", "figure"),
+    ],
+    [Input("availability-station-dropdown", "value"), Input("initial-trigger", "data")],
+)
+def update_all_availability_plots(
+    selected_station: str,
+    initial_trigger: bool,
+) -> Tuple[go.Figure, ...]:
+    """Update all data availability plots based on selected station."""
+    del initial_trigger
+
+    if not selected_station:
+        empty = go.Figure()
+        empty.add_annotation(
+            text="No station selected",
+            xref="paper",
+            yref="paper",
+            x=0.5,
+            y=0.5,
+            showarrow=False,
+        )
+        _apply_figure_style(empty)
+        return tuple([empty] * 12)
+
+    station_display_name = get_station_name(selected_station)
+    figures: List[go.Figure] = []
+
+    for pollutant in POLLUTANT_KEYS:
         df = get_pollutant_availability_data(selected_station, pollutant)
-        
+        label = POLLUTANT_MAPPING.get(pollutant, pollutant)
+
         if df.empty:
-            fig = go.Figure().add_annotation(
-                text=f"No data available for {POLLUTANT_MAPPING.get(pollutant, pollutant)}",
-                xref="paper", yref="paper",
-                x=0.5, y=0.5, showarrow=False
+            fig = go.Figure()
+            fig.add_annotation(
+                text=f"No data available for {label}",
+                xref="paper",
+                yref="paper",
+                x=0.5,
+                y=0.5,
+                showarrow=False,
             )
         else:
-            fig = go.Figure()
-            
-            # Create bar chart
-            fig.add_trace(go.Bar(
-                x=df['month'],
-                y=df['count'],
-                name=POLLUTANT_MAPPING.get(pollutant, pollutant),
-                marker_color='red'
-            ))
-            
-            title = f"{station_display_name} - {POLLUTANT_MAPPING.get(pollutant, pollutant)} Data Availability"
-            
-            fig.update_layout(
-                title=title,
-                xaxis_title="Month",
-                yaxis_title="Hourly Data Count",
-                hovermode='closest',
-                xaxis=dict(
-                    range=['2000-01-01', '2025-12-31'],
-                    type='date'
-                ),
-                margin=dict(l=50, r=20, t=50, b=50)
+            fig = go.Figure(
+                data=[
+                    go.Bar(
+                        x=df["month"],
+                        y=df["count"],
+                        name=label,
+                        marker_color="#c0392b",
+                        opacity=0.85,
+                    )
+                ]
             )
-        
+            fig.update_layout(
+                title=dict(
+                    text=f"{station_display_name} — {label}",
+                    font=dict(size=14),
+                ),
+                xaxis_title="Month",
+                yaxis_title="Hourly record count",
+                hovermode="closest",
+                xaxis=dict(range=["2000-01-01", "2025-12-31"], type="date"),
+            )
+
+        _apply_figure_style(fig)
         figures.append(fig)
-    
-    # Process meteorology availability plots
-    for field in meteorology_fields:
+
+    for field in MET_KEYS:
         df = get_meteorology_availability_data(selected_station, field)
-        
+        label = METEOROLOGY_MAPPING.get(field, field)
+
         if df.empty:
-            fig = go.Figure().add_annotation(
-                text=f"No data available for {METEOROLOGY_MAPPING.get(field, field)}",
-                xref="paper", yref="paper",
-                x=0.5, y=0.5, showarrow=False
+            fig = go.Figure()
+            fig.add_annotation(
+                text=f"No data available for {label}",
+                xref="paper",
+                yref="paper",
+                x=0.5,
+                y=0.5,
+                showarrow=False,
             )
         else:
-            fig = go.Figure()
-            
-            # Create bar chart
-            fig.add_trace(go.Bar(
-                x=df['month'],
-                y=df['count'],
-                name=METEOROLOGY_MAPPING.get(field, field),
-                marker_color='blue'
-            ))
-            
-            title = f"{station_display_name} - {METEOROLOGY_MAPPING.get(field, field)} Data Availability"
-            
-            fig.update_layout(
-                title=title,
-                xaxis_title="Month",
-                yaxis_title="Hourly Data Count",
-                hovermode='closest',
-                xaxis=dict(
-                    range=['2000-01-01', '2025-12-31'],
-                    type='date'
-                ),
-                margin=dict(l=50, r=20, t=50, b=50)
+            fig = go.Figure(
+                data=[
+                    go.Bar(
+                        x=df["month"],
+                        y=df["count"],
+                        name=label,
+                        marker_color="#2980b9",
+                        opacity=0.85,
+                    )
+                ]
             )
-        
+            fig.update_layout(
+                title=dict(
+                    text=f"{station_display_name} — {label}",
+                    font=dict(size=14),
+                ),
+                xaxis_title="Month",
+                yaxis_title="Hourly record count",
+                hovermode="closest",
+                xaxis=dict(range=["2000-01-01", "2025-12-31"], type="date"),
+            )
+
+        _apply_figure_style(fig)
         figures.append(fig)
-    
-    return figures
+
+    return tuple(figures)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run(
-        debug=DASHBOARD_CONFIG['debug'], 
-        host=DASHBOARD_CONFIG['host'], 
-        port=DASHBOARD_CONFIG['port']
-    ) 
+        debug=DASHBOARD_CONFIG["debug"],
+        host=DASHBOARD_CONFIG["host"],
+        port=DASHBOARD_CONFIG["port"],
+    )
