@@ -1,14 +1,26 @@
+import atexit
 import netrc
-from typing import Tuple, Optional
+import os
+import subprocess
+import time
+from typing import Optional, Tuple
+
+import pandas as pd
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
-import pandas as pd
 
 DB_MACHINE = 'DB-OZ'
 # DB_MACHINE = 'DB-SOLOREAD'
 # DB_MACHINE = 'OWGIS-OPERATIVO'
 DB_NAME = 'contingencia'
-DB_HOST = 'localhost'  # Changed from 'amate.atmosfera.unam.mx' to 'localhost'
+# Connect via SSH tunnel to amate (direct 5432 is blocked from outside).
+DB_HOST = 'localhost'
+DB_PORT = 5432
+DB_SSH_TARGET = os.environ.get('CCA_DB_SSH', 'amate')
+DB_SSH_PORT = int(os.environ.get('CCA_DB_SSH_PORT', '5543'))
+DB_SSH_LOCAL_PORT = int(os.environ.get('CCA_DB_LOCAL_PORT', '15432'))
+
+_ssh_tunnel_proc: Optional[subprocess.Popen] = None
 
 # Pollutant mapping based on the provided table names
 POLLUTANT_MAPPING = {
@@ -36,10 +48,10 @@ def get_db_credentials(machine: str = DB_MACHINE) -> Tuple[str, str, str]:
     Retrieve database credentials from the .netrc file for the given machine.
 
     Args:
-        machine (str): The machine name in .netrc.
+        machine: The machine name in .netrc.
 
     Returns:
-        Tuple[str, str, str]: (username, password, host)
+        Tuple of username, password, and connection host (localhost via tunnel).
     """
     auth = netrc.netrc().authenticators(machine)
     if not auth:
@@ -47,53 +59,134 @@ def get_db_credentials(machine: str = DB_MACHINE) -> Tuple[str, str, str]:
     return auth[0], auth[2], DB_HOST
 
 
+def _use_ssh_tunnel() -> bool:
+    """
+    Return whether the DB connection should use an SSH port forward.
+
+    Tunnel is on by default; set CCA_DB_SSH_TUNNEL=0 for direct amate:5432.
+    """
+    flag = os.environ.get('CCA_DB_SSH_TUNNEL', '1').lower()
+    return flag not in ('0', 'false', 'no', 'off')
+
+
+def _start_ssh_tunnel() -> Tuple[str, int]:
+    """
+    Open ssh -L local_port:127.0.0.1:5432 to amate (idempotent per process).
+
+    Returns:
+        Host and port for SQLAlchemy (127.0.0.1 and the local forward port).
+    """
+    global _ssh_tunnel_proc
+    if _ssh_tunnel_proc is not None and _ssh_tunnel_proc.poll() is None:
+        return '127.0.0.1', DB_SSH_LOCAL_PORT
+
+    ssh_cmd = [
+        'ssh',
+        '-N',
+        '-p',
+        str(DB_SSH_PORT),
+        '-L',
+        f'{DB_SSH_LOCAL_PORT}:127.0.0.1:{DB_PORT}',
+        DB_SSH_TARGET,
+    ]
+    _ssh_tunnel_proc = subprocess.Popen(
+        ssh_cmd,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
+    atexit.register(_stop_ssh_tunnel)
+    time.sleep(1.5)
+    if _ssh_tunnel_proc.poll() is not None:
+        err = (
+            _ssh_tunnel_proc.stderr.read().decode()
+            if _ssh_tunnel_proc.stderr
+            else ''
+        )
+        raise RuntimeError(f'SSH tunnel to {DB_SSH_TARGET} failed: {err}')
+    return '127.0.0.1', DB_SSH_LOCAL_PORT
+
+
+def _stop_ssh_tunnel() -> None:
+    """Terminate the SSH tunnel subprocess if it is still running."""
+    global _ssh_tunnel_proc
+    if _ssh_tunnel_proc is not None and _ssh_tunnel_proc.poll() is None:
+        _ssh_tunnel_proc.terminate()
+        try:
+            _ssh_tunnel_proc.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            _ssh_tunnel_proc.kill()
+    _ssh_tunnel_proc = None
+
+
+def get_db_connect_host_port() -> Tuple[str, int]:
+    """
+    Resolve database host and port (localhost via SSH tunnel or direct amate).
+
+    Returns:
+        Hostname and TCP port for PostgreSQL.
+    """
+    if _use_ssh_tunnel():
+        return _start_ssh_tunnel()
+    return 'amate.atmosfera.unam.mx', DB_PORT
+
+
 def get_db_engine() -> Optional[Engine]:
     """
     Create and return a SQLAlchemy engine for database connections.
 
+    By default opens an SSH tunnel (amate:5543) and connects to localhost:15432.
+
     Returns:
-        Optional[Engine]: SQLAlchemy engine object or None if connection fails.
+        SQLAlchemy engine object or None if connection fails.
     """
     try:
-        user, password, host = get_db_credentials()
-        connection_string = f"postgresql://{user}:{password}@{host}/{DB_NAME}"
-        engine = create_engine(connection_string, pool_pre_ping=True)
+        user, password, _ = get_db_credentials()
+        host, port = get_db_connect_host_port()
+        connection_string = (
+            f"postgresql://{user}:{password}@{host}:{port}/{DB_NAME}"
+        )
+        engine = create_engine(
+            connection_string,
+            pool_pre_ping=True,
+            connect_args={"connect_timeout": 10},
+        )
         return engine
     except Exception as e:
         print(f"Database connection error: {e}")
         return None
 
+
 def clean_data_value(value: object) -> str:
     """
     Clean data values by removing special characters and converting to string.
-    
+
     Args:
-        value (object): Raw value from the data
-        
+        value: Raw value from the data.
+
     Returns:
-        str: Cleaned string value
+        Cleaned string value.
     """
     if pd.isna(value) or value == 'nr':
         return 'nr'
-    
+
     # Convert to string and clean special characters
     value_str = str(value)
-    
+
     # Remove common problematic characters that might appear in PM data
     # Replace μ (micro) with 'u' or remove it
     value_str = value_str.replace('μ', 'u')
-    
+
     # Remove any other non-numeric characters except decimal points and minus signs
     import re
     # Keep only numbers, decimal points, minus signs, and 'nr'
     if value_str.lower() == 'nr':
         return 'nr'
-    
+
     # Try to extract numeric value
     numeric_match = re.search(r'-?\d*\.?\d*', value_str)
     if numeric_match:
         return numeric_match.group()
-    
+
     return value_str
 
 
@@ -101,12 +194,12 @@ def clean_data_value(value: object) -> str:
 def num_string(num: int) -> str:
     """
     Convert a number to a zero-padded string.
-    
+
     Args:
-        num (int): Number to convert
-        
+        num: Number to convert.
+
     Returns:
-        str: Zero-padded string representation
+        Zero-padded string representation.
     """
     if num < 10:
         return "0" + str(num)
@@ -118,41 +211,48 @@ def num_string(num: int) -> str:
 def test_connection() -> bool:
     """
     Test the database connection by executing a simple query.
-    
+
     Returns:
-        bool: True if connection successful, False otherwise.
+        True if connection successful, False otherwise.
     """
     try:
         engine = get_db_engine()
         if engine is None:
             print("❌ Failed to create database engine")
             return False
-        
+
         # Test connection with a simple query
         with engine.connect() as connection:
             result = connection.execute(text("SELECT 1"))
             result.fetchone()
-        
-        print("✅ Database connection successful")
+
+        host, port = get_db_connect_host_port()
+        print(f"✅ Database connection successful ({host}:{port})")
         return True
-        
+
     except Exception as e:
         print(f"❌ Database connection test failed: {e}")
         return False
 
 
-def main():
+def main() -> int:
     """
     Main function to test database connection when run as script.
+
+    Returns:
+        Exit code 0 on success, 1 on failure.
     """
     print("Testing database connection...")
-    print(f"Host: {DB_HOST}")
+    host, port = get_db_connect_host_port()
+    print(f"Connect: {host}:{port}")
     print(f"Database: {DB_NAME}")
     print(f"Machine: {DB_MACHINE}")
+    if _use_ssh_tunnel():
+        print(f"SSH tunnel: {DB_SSH_TARGET}:{DB_SSH_PORT} -> 127.0.0.1:{DB_SSH_LOCAL_PORT}")
     print("-" * 50)
-    
+
     success = test_connection()
-    
+
     if success:
         print("\n🎉 Database connection test passed!")
         return 0
@@ -162,4 +262,4 @@ def main():
 
 
 if __name__ == '__main__':
-    exit(main()) 
+    exit(main())
