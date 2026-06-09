@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import dash
 import dash_bootstrap_components as dbc
@@ -7,6 +7,19 @@ import plotly.graph_objects as go
 from dash import Input, Output, callback, dcc, html
 from datetime import datetime, timedelta
 
+import dash_cytoscape as cyto
+
+from db_utils.schema_introspect import load_schema_snapshot, snapshot_from_store_dict, snapshot_to_store_dict
+from db_utils.schema_viz import (
+    CATEGORY_COLORS,
+    CATEGORY_LABELS,
+    build_cytoscape_elements,
+    build_cytoscape_stylesheet,
+    build_relationship_summary,
+    filter_object_names,
+    format_tap_edge_detail,
+    table_detail_info,
+)
 from db_utils.queries_select import (
     get_forecast_otres_all_stations_spatial_mean_max,
     get_forecast_otres_mean_hour_p01,
@@ -33,6 +46,13 @@ DASHBOARD_CONFIG: Dict[str, Any] = {
 
 SLIDER_MAX_HOURS: int = 24 * 30 * 6
 DEFAULT_WINDOW_HOURS: int = 12 * 24
+
+PLOTLY_GRAPH_CONFIG: Dict[str, Any] = {
+    "displayModeBar": True,
+    "displaylogo": False,
+    "scrollZoom": True,
+    "modeBarButtonsToRemove": ["zoomIn", "zoomOut", "lasso2d"],
+}
 
 
 def get_stations_list() -> List[Dict[str, str]]:
@@ -62,7 +82,7 @@ def _graph_card(title: str, graph_id: str, height: str = "440px") -> dbc.Card:
         [
             dbc.CardHeader(title, className="fw-semibold py-2 bg-light border-0"),
             dbc.CardBody(
-                dcc.Graph(id=graph_id, style={"height": height}, config={"displayModeBar": True}),
+                dcc.Graph(id=graph_id, style={"height": height}, config=PLOTLY_GRAPH_CONFIG),
                 className="p-2 pt-0",
             ),
         ],
@@ -238,6 +258,294 @@ def _meteorology_plot_pairs() -> List[Tuple[str, str]]:
     return [(METEOROLOGY_MAPPING[k], f"plot-{k}") for k in MET_KEYS]
 
 
+def _schema_category_options() -> List[Dict[str, str]]:
+    """Dropdown options for schema object category filter."""
+    options = [{"label": "All categories", "value": "all"}]
+    options.extend(
+        {"label": label, "value": key}
+        for key, label in CATEGORY_LABELS.items()
+    )
+    return options
+
+
+def _schema_role_badge(role: str) -> html.Td:
+    """Render a PK/FK badge for the schema detail table."""
+    if role == "pk":
+        return html.Td(dbc.Badge("PK", color="warning", className="schema-role-badge"))
+    if role == "fk":
+        return html.Td(dbc.Badge("FK", color="info", className="schema-role-badge"))
+    return html.Td(html.Span("—", className="text-muted"))
+
+
+def _schema_selection_detail(
+    snapshot: Any,
+    table_id: Optional[str],
+) -> html.Div:
+    """
+    Build the sidebar panel for a selected table or view.
+
+    Args:
+        snapshot: Parsed schema metadata.
+        table_id: Selected Cytoscape node id.
+
+    Returns:
+        Dash HTML for the selection panel.
+    """
+    if not table_id:
+        return html.Div(
+            [
+                html.P(
+                    "Click a table or view in the diagram.",
+                    className="mb-2 text-muted",
+                ),
+                html.P(
+                    "Pan: drag background · Zoom: scroll",
+                    className="mb-0 small text-muted",
+                ),
+            ],
+            className="schema-sidebar-panel",
+        )
+
+    detail = table_detail_info(snapshot, table_id)
+    if not detail:
+        return html.Div(
+            f"Unknown object: {table_id}",
+            className="schema-sidebar-panel text-muted",
+        )
+
+    category = detail["category"]
+    border_color = CATEGORY_COLORS.get(category, "#6c757d")
+    kind_label = "VIEW" if detail["kind"] == "view" else "TABLE"
+    kind_color = "secondary" if detail["kind"] == "view" else "primary"
+
+    header = html.Div(
+        [
+            html.Div(
+                [
+                    html.Strong(detail["name"], className="schema-detail-title"),
+                    dbc.Badge(
+                        kind_label,
+                        color=kind_color,
+                        className="ms-2 align-middle",
+                    ),
+                    dbc.Badge(
+                        CATEGORY_LABELS.get(category, category),
+                        color="light",
+                        text_color="dark",
+                        className="ms-1 align-middle",
+                    ),
+                ],
+                className="mb-2",
+            ),
+            html.P(
+                f"{len(detail['columns'])} column(s)",
+                className="small text-muted mb-2",
+            ),
+        ],
+        className="schema-detail-header",
+        style={"borderLeftColor": border_color},
+    )
+
+    body_rows = [
+        html.Tr(
+            [
+                _schema_role_badge(col["role"]),
+                html.Td(col["name"], className="schema-col-name"),
+                html.Td(
+                    [
+                        html.Code(col["type"], className="schema-col-type"),
+                        html.Span(
+                            " nullable" if col["nullable"] == "yes" else "",
+                            className="text-muted small",
+                        ),
+                    ]
+                ),
+            ]
+        )
+        for col in detail["columns"]
+    ]
+
+    table = dbc.Table(
+        [
+            html.Thead(
+                html.Tr(
+                    [
+                        html.Th("", className="schema-th-role"),
+                        html.Th("Column"),
+                        html.Th("Type"),
+                    ]
+                )
+            ),
+            html.Tbody(body_rows),
+        ],
+        bordered=True,
+        hover=True,
+        size="sm",
+        responsive=True,
+        className="schema-detail-table mb-0",
+    )
+
+    return html.Div([header, table], className="schema-sidebar-panel")
+
+
+def _schema_legend() -> html.Div:
+    """Color legend for schema graph node categories."""
+    items = [
+        html.Span(
+            [
+                html.Span(className="schema-legend-dot", style={"background": color}),
+                CATEGORY_LABELS.get(key, key),
+            ],
+            className="me-3 small",
+        )
+        for key, color in CATEGORY_COLORS.items()
+    ]
+    return html.Div(items, className="d-flex flex-wrap mb-2")
+
+
+def _schema_tab_body() -> List[Any]:
+    """Interactive ER diagram (Dash Cytoscape)."""
+    return [
+        dcc.Store(id="schema-metadata"),
+        dcc.Store(id="schema-tapped-node"),
+        dbc.Card(
+            dbc.CardBody(
+                dbc.Row(
+                    [
+                        dbc.Col(
+                            [
+                                dbc.Label("Search tables / columns", className="small text-muted mb-1"),
+                                dbc.Input(
+                                    id="schema-search",
+                                    type="search",
+                                    placeholder="e.g. cont_otres, id_est…",
+                                    debounce=True,
+                                ),
+                            ],
+                            xs=12,
+                            md=4,
+                            lg=3,
+                        ),
+                        dbc.Col(
+                            [
+                                dbc.Label("Category", className="small text-muted mb-1"),
+                                dcc.Dropdown(
+                                    id="schema-category-filter",
+                                    options=_schema_category_options(),
+                                    value="all",
+                                    clearable=False,
+                                ),
+                            ],
+                            xs=12,
+                            md=4,
+                            lg=2,
+                        ),
+                        dbc.Col(
+                            dbc.Checklist(
+                                id="schema-show-views",
+                                options=[{"label": " Views", "value": "views"}],
+                                value=["views"],
+                                inline=True,
+                                className="mt-4",
+                            ),
+                            xs="auto",
+                        ),
+                        dbc.Col(
+                            dbc.Checklist(
+                                id="schema-show-system",
+                                options=[{"label": " PostGIS / system", "value": "system"}],
+                                value=[],
+                                inline=True,
+                                className="mt-4",
+                            ),
+                            xs="auto",
+                        ),
+                        dbc.Col(
+                            dbc.Checklist(
+                                id="schema-show-inferred",
+                                options=[
+                                    {
+                                        "label": " Inferred id_est links",
+                                        "value": "inferred",
+                                    }
+                                ],
+                                value=["inferred"],
+                                inline=True,
+                                className="mt-4",
+                            ),
+                            xs="auto",
+                        ),
+                        dbc.Col(
+                            dbc.Button(
+                                [html.I(className="bi bi-arrow-clockwise me-1"), "Refresh schema"],
+                                id="schema-refresh-btn",
+                                color="secondary",
+                                outline=True,
+                                size="sm",
+                                className="mt-3",
+                            ),
+                            xs="auto",
+                            className="ms-auto",
+                        ),
+                    ],
+                    className="g-2 align-items-start",
+                )
+            ),
+            className="mb-3 border-0 shadow-sm",
+        ),
+        _schema_legend(),
+        dbc.Row(
+            [
+                dbc.Col(
+                    [
+                        html.H6("Selection", className="fw-semibold mb-2"),
+                        html.Div(
+                            id="schema-selected-detail",
+                            children=_schema_selection_detail(None, None),
+                            className="schema-sidebar-panel-wrap",
+                        ),
+                        html.H6("Foreign keys", className="fw-semibold mb-2 mt-3"),
+                        html.Pre(id="schema-edge-detail", className="schema-sidebar-pre mb-2"),
+                        html.Ul(id="schema-fk-summary", className="schema-fk-list mb-0"),
+                        html.P(
+                            "PK = primary key · FK = outgoing foreign key",
+                            className="text-muted small mt-3 mb-0",
+                        ),
+                    ],
+                    xs=12,
+                    lg=3,
+                    className="mb-3 mb-lg-0",
+                ),
+                dbc.Col(
+                    dbc.Card(
+                        dbc.CardBody(
+                            cyto.Cytoscape(
+                                id="schema-erd",
+                                elements=[],
+                                stylesheet=[],
+                                layout={"name": "preset"},
+                                style={"width": "100%", "height": "100%"},
+                                className="schema-erd-cy",
+                                minZoom=0.15,
+                                maxZoom=2.5,
+                                wheelSensitivity=0.15,
+                                userPanningEnabled=True,
+                                userZoomingEnabled=True,
+                                boxSelectionEnabled=False,
+                            ),
+                            className="p-2 schema-erd-panel",
+                        ),
+                        className="border-0 shadow-sm h-100",
+                    ),
+                    xs=12,
+                    lg=9,
+                ),
+            ],
+            className="g-3",
+        ),
+    ]
+
+
 def _availability_plot_pairs() -> List[Tuple[str, str]]:
     poll = [
         (f"{POLLUTANT_MAPPING[k]} — monthly counts", f"availability-plot-{k}")
@@ -279,20 +587,9 @@ def _build_layout() -> dbc.Container:
                 tab_id="tab-availability",
             ),
             dbc.Tab(
-                dbc.Container(
-                    dbc.Alert(
-                        [
-                            html.Strong("Coming soon."),
-                            " Additional analysis views can be added here.",
-                        ],
-                        color="info",
-                        className="mt-2 border-0 shadow-sm",
-                    ),
-                    fluid=True,
-                    className="py-4",
-                ),
-                label="Additional analysis",
-                tab_id="tab-extra",
+                dbc.Container(_schema_tab_body(), fluid=True, className="py-2"),
+                label="Database schema",
+                tab_id="tab-schema",
             ),
         ],
         id="main-tabs",
@@ -342,7 +639,7 @@ app = dash.Dash(
     __name__,
     external_stylesheets=[dbc.themes.FLATLY, dbc.icons.BOOTSTRAP],
     title="Air quality dashboard",
-    suppress_callback_exceptions=False,
+    suppress_callback_exceptions=True,
 )
 app.layout = _build_layout()
 
@@ -824,6 +1121,150 @@ def update_all_availability_plots(
         figures.append(fig)
 
     return tuple(figures)
+
+
+@app.callback(
+    Output("schema-metadata", "data"),
+    [Input("initial-trigger", "data"), Input("schema-refresh-btn", "n_clicks")],
+)
+def load_schema_metadata(initial_trigger: bool, refresh_clicks: Optional[int]) -> Dict[str, object]:
+    """Load PostgreSQL schema into a session store (on load and on refresh)."""
+    del initial_trigger, refresh_clicks
+    snapshot = load_schema_snapshot()
+    return snapshot_to_store_dict(snapshot)
+
+
+def _schema_filter_flags(
+    show_views_values: Optional[List[str]],
+    show_system_values: Optional[List[str]],
+    show_inferred_values: Optional[List[str]],
+) -> Tuple[bool, bool, bool]:
+    """Parse schema tab checklist values."""
+    return (
+        "views" in (show_views_values or []),
+        "system" in (show_system_values or []),
+        "inferred" in (show_inferred_values or []),
+    )
+
+
+@app.callback(
+    Output("schema-tapped-node", "data"),
+    [Input("schema-erd", "tapNodeData")],
+)
+def store_tapped_node(node_data: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Remember the last tapped table/view for highlighting."""
+    return node_data
+
+
+@app.callback(
+    Output("schema-erd", "elements"),
+    [
+        Input("schema-metadata", "data"),
+        Input("schema-category-filter", "value"),
+        Input("schema-show-views", "value"),
+        Input("schema-show-system", "value"),
+        Input("schema-show-inferred", "value"),
+    ],
+)
+def update_schema_erd_elements(
+    metadata: Optional[Dict[str, object]],
+    category: str,
+    show_views_values: Optional[List[str]],
+    show_system_values: Optional[List[str]],
+    show_inferred_values: Optional[List[str]],
+) -> List[Dict[str, Any]]:
+    """Build Cytoscape nodes and edges from live PostgreSQL metadata."""
+    snapshot = snapshot_from_store_dict(metadata)
+    if not snapshot.tables and not snapshot.views:
+        return []
+
+    show_views, show_system, include_inferred = _schema_filter_flags(
+        show_views_values, show_system_values, show_inferred_values
+    )
+    visible = filter_object_names(
+        snapshot,
+        "",
+        category or "all",
+        show_views,
+        show_system,
+        apply_search=False,
+    )
+    return build_cytoscape_elements(snapshot, visible, include_inferred)
+
+
+@app.callback(
+    Output("schema-erd", "stylesheet"),
+    [
+        Input("schema-metadata", "data"),
+        Input("schema-search", "value"),
+        Input("schema-category-filter", "value"),
+        Input("schema-show-views", "value"),
+        Input("schema-show-system", "value"),
+        Input("schema-show-inferred", "value"),
+        Input("schema-tapped-node", "data"),
+    ],
+)
+def update_schema_erd_stylesheet(
+    metadata: Optional[Dict[str, object]],
+    search: Optional[str],
+    category: str,
+    show_views_values: Optional[List[str]],
+    show_system_values: Optional[List[str]],
+    show_inferred_values: Optional[List[str]],
+    tapped_node: Optional[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Apply search hits and neighborhood highlighting on the ER diagram."""
+    snapshot = snapshot_from_store_dict(metadata)
+    show_views, show_system, include_inferred = _schema_filter_flags(
+        show_views_values, show_system_values, show_inferred_values
+    )
+    visible = filter_object_names(
+        snapshot,
+        search or "",
+        category or "all",
+        show_views,
+        show_system,
+    )
+    selected_id = str(tapped_node["id"]) if tapped_node and tapped_node.get("id") else None
+    return build_cytoscape_stylesheet(
+        search,
+        selected_id,
+        snapshot,
+        visible,
+        include_inferred,
+    )
+
+
+@app.callback(
+    [
+        Output("schema-selected-detail", "children"),
+        Output("schema-fk-summary", "children"),
+    ],
+    [Input("schema-erd", "tapNodeData"), Input("schema-metadata", "data"), Input("schema-show-inferred", "value")],
+)
+def show_tapped_table_detail(
+    node_data: Optional[Dict[str, Any]],
+    metadata: Optional[Dict[str, object]],
+    show_inferred_values: Optional[List[str]],
+) -> Tuple[html.Div, List[html.Li]]:
+    """Show column list and FK summary when a table node is tapped."""
+    snapshot = snapshot_from_store_dict(metadata)
+    include_inferred = "inferred" in (show_inferred_values or [])
+    table_id = str(node_data["id"]) if node_data and node_data.get("id") else None
+    fk_lines = build_relationship_summary(snapshot, table_id, include_inferred)
+    fk_items = [html.Li(line, className="mb-1") for line in fk_lines] or [
+        html.Li("No foreign keys for this object.", className="text-muted")
+    ]
+    return _schema_selection_detail(snapshot, table_id), fk_items
+
+
+@app.callback(
+    Output("schema-edge-detail", "children"),
+    [Input("schema-erd", "tapEdgeData")],
+)
+def show_tapped_edge_detail(edge_data: Optional[Dict[str, Any]]) -> str:
+    """Show FK detail when an edge is tapped."""
+    return format_tap_edge_detail(edge_data) or "Click an edge to see the foreign key."
 
 
 if __name__ == "__main__":

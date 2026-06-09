@@ -1,6 +1,7 @@
 import atexit
 import netrc
 import os
+import socket
 import subprocess
 import time
 from typing import Optional, Tuple
@@ -13,8 +14,8 @@ DB_MACHINE = 'DB-OZ'
 # DB_MACHINE = 'DB-SOLOREAD'
 # DB_MACHINE = 'OWGIS-OPERATIVO'
 DB_NAME = 'contingencia'
-# Connect via SSH tunnel to amate (direct 5432 is blocked from outside).
-DB_HOST = 'localhost'
+# On amate use 127.0.0.1:5432. SSH tunnel is only for remote machines.
+DB_HOST = '127.0.0.1'
 DB_PORT = 5432
 DB_SSH_TARGET = os.environ.get('CCA_DB_SSH', 'amate')
 DB_SSH_PORT = int(os.environ.get('CCA_DB_SSH_PORT', '5543'))
@@ -63,10 +64,12 @@ def _use_ssh_tunnel() -> bool:
     """
     Return whether the DB connection should use an SSH port forward.
 
-    Tunnel is on by default; set CCA_DB_SSH_TUNNEL=0 for direct amate:5432.
+    Disabled by default on amate. Set CCA_DB_SSH_TUNNEL=1 for remote access.
     """
-    flag = os.environ.get('CCA_DB_SSH_TUNNEL', '1').lower()
-    return flag not in ('0', 'false', 'no', 'off')
+    if _is_local_amate():
+        return False
+    flag = os.environ.get('CCA_DB_SSH_TUNNEL', '0').lower()
+    return flag in ('1', 'true', 'yes', 'on')
 
 
 def _start_ssh_tunnel() -> Tuple[str, int]:
@@ -118,13 +121,32 @@ def _stop_ssh_tunnel() -> None:
     _ssh_tunnel_proc = None
 
 
+def _is_local_amate() -> bool:
+    """
+    Return whether this process is running on the amate database host.
+
+    Cron jobs on amate should connect to PostgreSQL on 127.0.0.1 instead of
+    opening an SSH tunnel to the same machine.
+
+    Returns:
+        True when the local hostname is amate.
+    """
+    hostname = socket.gethostname()
+    return hostname == 'amate' or hostname.startswith('amate.')
+
+
 def get_db_connect_host_port() -> Tuple[str, int]:
     """
-    Resolve database host and port (localhost via SSH tunnel or direct amate).
+    Resolve database host and port for PostgreSQL.
+
+    On amate connects to 127.0.0.1:5432. Remote hosts may use an SSH tunnel
+    (CCA_DB_SSH_TUNNEL=1) or direct amate.atmosfera.unam.mx:5432.
 
     Returns:
         Hostname and TCP port for PostgreSQL.
     """
+    if _is_local_amate():
+        return DB_HOST, DB_PORT
     if _use_ssh_tunnel():
         return _start_ssh_tunnel()
     return 'amate.atmosfera.unam.mx', DB_PORT
@@ -134,7 +156,7 @@ def get_db_engine() -> Optional[Engine]:
     """
     Create and return a SQLAlchemy engine for database connections.
 
-    By default opens an SSH tunnel (amate:5543) and connects to localhost:15432.
+    On amate uses local PostgreSQL at 127.0.0.1:5432.
 
     Returns:
         SQLAlchemy engine object or None if connection fails.
@@ -247,8 +269,15 @@ def main() -> int:
     print(f"Connect: {host}:{port}")
     print(f"Database: {DB_NAME}")
     print(f"Machine: {DB_MACHINE}")
-    if _use_ssh_tunnel():
-        print(f"SSH tunnel: {DB_SSH_TARGET}:{DB_SSH_PORT} -> 127.0.0.1:{DB_SSH_LOCAL_PORT}")
+    if _is_local_amate():
+        print("Mode: local PostgreSQL on amate")
+    elif _use_ssh_tunnel():
+        print(
+            f"SSH tunnel: {DB_SSH_TARGET}:{DB_SSH_PORT} "
+            f"-> 127.0.0.1:{DB_SSH_LOCAL_PORT}"
+        )
+    else:
+        print(f"Mode: direct {DB_HOST}:{DB_PORT}")
     print("-" * 50)
 
     success = test_connection()

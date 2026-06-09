@@ -1,6 +1,6 @@
 """
 Dash app: ozone (otres) observations vs ``forecast_otres`` with sampled lead hours
-(hour_p01, p07, p13, p19 within 01–24), spatial max series, and daily-max verification (p01–p17).
+(hour_p01–p03 plus p06, p12, p18, p24), spatial max series, and daily-max verification (p01–p17).
 
 Each ``forecast_otres`` row is an ML **issue** at ``fecha``; ``hour_pNN`` is valid at
 ``fecha + NN`` hours. Traces are plotted at that **valid** time, and queries pull earlier
@@ -48,8 +48,15 @@ DASHBOARD_CONFIG: Dict[str, Any] = {
 SLIDER_MAX_HOURS: int = 24 * 30 * 6
 DEFAULT_WINDOW_HOURS: int = 12 * 24
 
-# Single-station panel: which ``hour_pNN`` leads to plot (01–24, step 6 h).
-FORECAST_SINGLE_STATION_PLOT_LEADS: Tuple[int, ...] = tuple(range(1, 25, 6))
+PLOTLY_GRAPH_CONFIG: Dict[str, Any] = {
+    "displayModeBar": True,
+    "displaylogo": False,
+    "scrollZoom": True,
+    "modeBarButtonsToRemove": ["zoomIn", "zoomOut", "lasso2d"],
+}
+
+# Single-station panel: ``hour_pNN`` leads to plot — p01–p03, then 6-hour steps to p24.
+FORECAST_SINGLE_STATION_PLOT_LEADS: Tuple[int, ...] = (1, 2, 3, 6, 12, 18, 24)
 FORECAST_SINGLE_STATION_PLOT_LEADS_LABEL: str = ", ".join(
     f"hour_p{n:02d}" for n in FORECAST_SINGLE_STATION_PLOT_LEADS
 )
@@ -403,7 +410,7 @@ def _graph_card(title: str, graph_id: str, height: str = "520px") -> dbc.Card:
                 dcc.Graph(
                     id=graph_id,
                     style={"height": height},
-                    config={"displayModeBar": True},
+                    config=PLOTLY_GRAPH_CONFIG,
                 ),
                 className="p-2 pt-0",
             ),
@@ -445,7 +452,7 @@ def _build_layout() -> dbc.Container:
         [
             html.P(
                 f"Compare {label} observations with model forecasts on the first panel using "
-                f"{FORECAST_SINGLE_STATION_PLOT_LEADS_LABEL} (every 6 h from hour_p01 through hour_p24). "
+                f"{FORECAST_SINGLE_STATION_PLOT_LEADS_LABEL} (hour_p01–hour_p03, then every 6 h to hour_p24). "
                 "Each forecast row is one ML **issue** at ``fecha``; ``hour_pNN`` is the value at **valid** "
                 "time ``fecha + NN`` hours. Traces are drawn on the valid-time axis; earlier issue rows are "
                 "loaded and then clipped to your window. This matches ``nn_model_corrector.dataset_generator`` "
@@ -824,7 +831,7 @@ def _build_panel1_figure(
     First panel: observations plus forecast (all-stations mean/max p01, or sampled station leads).
 
     For a single station, forecast traces use :data:`FORECAST_SINGLE_STATION_PLOT_LEADS`
-    (hour_p01 … through hour_p24 in steps of 6 h by default).
+    (hour_p01–p03, then hour_p06, p12, p18, p24 by default).
 
     Args:
         selected_station: Station id or ``all_stations``.

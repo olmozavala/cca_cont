@@ -1,17 +1,11 @@
 #!/bin/bash
 
-# Set the root path
-ROOT_PATH="/AIRE/home/olmozavala/CODE/cca_cont"
+source "$(dirname "$0")/scripts/local_env.sh"
 
 # Activate virtual environment
-source $ROOT_PATH/.venv/bin/activate
-# CONDA:
-#. $HOME/miniforge/etc/profile.d/conda.sh
-#conda activate cca_cont
+source "$ROOT_PATH/.venv/bin/activate"
 
-# Run the update script and save output to log file
-python $ROOT_PATH/2_update_last_hour.py
+# Run the update script
+python "$ROOT_PATH/2_update_last_hour.py"
 
-# Deactivate virtual environment 
 deactivate
-#conda deactivate
